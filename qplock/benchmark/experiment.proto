@@ -1,0 +1,67 @@
+syntax = "proto2";
+
+import "protos/metrics.proto";
+import "protos/colosseum.proto";
+
+enum State {
+  READY = 0;
+  DONE = 1;
+  ERROR = 2;
+};
+
+message Status {
+  optional State state = 1; 
+};
+
+message ClientProto {
+  optional string host = 1;
+  optional string id = 2;
+};
+
+enum Lock {
+  QPLOCK = 0;
+  CAS = 1;
+};
+
+message ExperimentParams {
+  // A name to give the experiment, used to prefix the result file
+  optional string name = 1;
+
+  // The mode determining how to run the benchmark (i.e., "client" or "server")
+  optional string mode = 2;
+
+  // A list of client ids to run on this node when running in client mode
+  repeated uint32 client_ids = 4;
+
+  // The benchmark length
+  optional int32 runtime = 5;
+
+  // The offered load in queries (or ops) per second
+  optional int32 max_qps = 6;
+
+  // The rate at which the actual QPS is sampled in milliseconds
+  optional uint32 sampling_rate_ms = 7;
+
+  // Directory where the results file is saved
+  optional string save_dir = 8;
+
+  // Kind of lock to use when running experiments
+  optional Lock lock = 11;
+
+  // Length of "critical section"
+  optional uint32 think_time_us = 12;
+
+  // The following are filled in automatically and will be overwritten
+
+  // The number of nodes in the cluster.
+  optional uint32 cluster_size = 9;
+
+  // The number of clients on a given node.
+  optional uint32 num_clients = 10;
+};
+
+message ResultProto {
+  optional ExperimentParams experiment_params = 1;
+  optional ClientProto client = 2;
+  optional rome.WorkloadDriverProto driver = 3;
+};

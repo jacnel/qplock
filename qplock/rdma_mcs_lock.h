@@ -5,16 +5,16 @@
 #include <cstdint>
 
 #include "rome/rdma/channel/sync_accessor.h"
+#include "rome/rdma/connection_manager/connection.h"
+#include "rome/rdma/connection_manager/connection_manager.h"
+#include "rome/rdma/memory_pool/memory_pool.h"
 #include "rome/rdma/rdma_memory.h"
-#include "src/node/connection.h"
-#include "src/node/connection_manager.h"
-#include "src/node/memory_pool.h"
 #include "util.h"
 
 namespace X {
 
 class RdmaMcsLock {
- public:
+public:
   using conn_type = MemoryPool::conn_type;
 
   struct alignas(128) Descriptor {
@@ -29,13 +29,13 @@ class RdmaMcsLock {
   RdmaMcsLock(MemoryPool::Peer self, std::unique_ptr<MemoryPool::cm_type> cm);
 
   absl::Status Init(MemoryPool::Peer host,
-                    const std::vector<MemoryPool::Peer>& peers);
+                    const std::vector<MemoryPool::Peer> &peers);
 
   bool IsLocked();
   void Lock();
   void Unlock();
 
- private:
+private:
   bool is_host_;
   MemoryPool::Peer self_;
   MemoryPool pool_;
@@ -44,7 +44,7 @@ class RdmaMcsLock {
   remote_ptr<Descriptor> desc_pointer_;
   remote_ptr<remote_ptr<Descriptor>> prealloc_;
 
-  volatile Descriptor* descriptor_;
+  volatile Descriptor *descriptor_;
 };
 
-}  // namespace X
+} // namespace X

@@ -11,10 +11,10 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":util",
-        "//src/node:connection_manager",
-        "//src/node:memory_pool",
         "@rome//rome/rdma:rdma_memory",
         "@rome//rome/rdma/channel:sync_accessor",
+        "@rome//rome/rdma/connection_manager",
+        "@rome//rome/rdma/memory_pool",
     ],
 )
 
@@ -29,7 +29,7 @@ cc_test(
 
 cc_library(
     name = "rdma_spin_lock",
-    visibility = ["//visibility:public"],
     hdrs = ["rdma_spin_lock.h"],
+    visibility = ["//visibility:public"],
     deps = ["@absl//absl/status"],
 )

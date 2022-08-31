@@ -21,7 +21,7 @@
 #include "google/protobuf/text_format.h"
 #include "rome/colosseum/client_adaptor.h"
 #include "rome/colosseum/qps_controller.h"
-#include "rome/colosseum/streams.h"
+#include "rome/colosseum/streams/streams.h"
 #include "rome/colosseum/workload_driver.h"
 #include "rome/logging/logging.h"
 #include "rome/metrics/summary.h"

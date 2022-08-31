@@ -8,7 +8,7 @@
 #include "benchmarks/qplock/experiment.pb.h"
 #include "benchmarks/qplock/setup.h"
 #include "rome/colosseum/client_adaptor.h"
-#include "rome/colosseum/streams.h"
+#include "rome/colosseum/streams/streams.h"
 #include "rome/logging/logging.h"
 #include "rome/metrics/counter.h"
 #include "rome/rdma/channel/sync_accessor.h"

@@ -3,21 +3,21 @@
 #include <memory>
 
 #include "absl/status/status.h"
-#include "src/node/connection_manager.h"
-#include "src/node/memory_pool.h"
-#include "src/qplock/util.h"
+#include "rome/rdma/connection_manager/connection_manager.h"
+#include "rome/rdma/memory_pool/memory_pool.h"
+#include "util.h"
 
 namespace X {
 
 using Peer = MemoryPool::Peer;
 
 class RdmaSpinLock {
- public:
-  RdmaSpinLock(const Peer& self, MemoryPool::cm_type* cm)
+public:
+  RdmaSpinLock(const Peer &self, MemoryPool::cm_type *cm)
       : self_(self), cm_(cm), pool_(self_, cm) {}
 
-  absl::Status Init(const Peer& host,
-                    const std::vector<MemoryPool::Peer>& peers) {
+  absl::Status Init(const Peer &host,
+                    const std::vector<MemoryPool::Peer> &peers) {
     bool is_host = self_.id == host.id;
     auto capacity = 2 * sizeof(uint64_t);
     auto status = pool_.Init(capacity, peers);
@@ -30,7 +30,7 @@ class RdmaSpinLock {
       proto.set_raddr(lock_.address());
 
       *(std::to_address(lock_)) = 0;
-      for (const auto& p : peers) {
+      for (const auto &p : peers) {
         auto conn_or = cm_->GetConnection(p.id);
         ROME_CHECK_OK(ROME_RETURN(conn_or.status()), conn_or);
         status = conn_or.value()->channel()->Send(proto);
@@ -61,7 +61,7 @@ class RdmaSpinLock {
 
   void Unlock() { pool_.Write<uint64_t>(lock_, 0, /*prealloc=*/local_); }
 
- private:
+private:
   static constexpr uint64_t kUnlocked = 0;
 
   Peer self_;
@@ -70,8 +70,8 @@ class RdmaSpinLock {
   remote_ptr<uint64_t> lock_;
   remote_ptr<uint64_t> local_;
 
-  MemoryPool::cm_type* cm_;
+  MemoryPool::cm_type *cm_;
   MemoryPool pool_;
 };
 
-}  // namespace X
+} // namespace X

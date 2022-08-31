@@ -6,10 +6,10 @@
 #include <thread>
 #include <unordered_map>
 
+#include "rome/logging/logging.h"
+#include "rome/rdma/connection_manager/connection_manager.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "rome/logging/logging.h"
-#include "src/node/connection_manager.h"
 
 namespace X {
 namespace {
@@ -22,7 +22,7 @@ constexpr uint16_t kHostId = 0;
 constexpr uint16_t kHostPort = 18000;
 
 class RdmaMcsLockTest : public ::testing::Test {
- protected:
+protected:
   using cm_type = MemoryPool::cm_type;
   using peer_type = MemoryPool::Peer;
 
@@ -39,15 +39,15 @@ class RdmaMcsLockTest : public ::testing::Test {
 
   void InitTest() {
     std::vector<std::thread> init_threads;
-    auto do_init = [this](const auto& p) {
+    auto do_init = [this](const auto &p) {
       ROME_ASSERT_OK(locks_[p.id]->Init(host_, peers_));
     };
     std::for_each(peers_.begin(), peers_.end(),
-                  [&init_threads, do_init](const auto& p) {
+                  [&init_threads, do_init](const auto &p) {
                     init_threads.emplace_back(do_init, p);
                   });
     std::for_each(init_threads.begin(), init_threads.end(),
-                  [](auto& t) { t.join(); });
+                  [](auto &t) { t.join(); });
   }
 
   const peer_type host_{kHostId, kIpAddress, kHostPort};
@@ -77,7 +77,7 @@ TEST_F(RdmaMcsLockTest, PeerIsLocked) {
   InitTest();
   ASSERT_EQ(peers_.size(), 10);
 
-  std::for_each(test_peers.begin(), test_peers.end(), [&](const auto& p) {
+  std::for_each(test_peers.begin(), test_peers.end(), [&](const auto &p) {
     auto iter = locks_.find(p.id);
     ASSERT_NE(iter, locks_.end());
     EXPECT_FALSE(iter->second->IsLocked());
@@ -138,7 +138,7 @@ TEST_F(RdmaMcsLockTest, MultipleConcurrentLockers) {
   ASSERT_EQ(peers_.size(), kNumClients + 1);
 
   std::atomic<bool> terminate = false;
-  auto do_work = [&terminate](auto* l) {
+  auto do_work = [&terminate](auto *l) {
     while (!terminate) {
       l->Lock();
       // std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -159,5 +159,5 @@ TEST_F(RdmaMcsLockTest, MultipleConcurrentLockers) {
   }
 }
 
-}  // namespace
-}  // namespace X
+} // namespace
+} // namespace X

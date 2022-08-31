@@ -123,7 +123,7 @@ cc_binary(
         "@absl//absl/status:statusor",
         "@rome//rome/colosseum:client_adaptor",
         "@rome//rome/colosseum:qps_controller",
-        "@rome//rome/colosseum:streams",
+        "@rome//rome/colosseum/streams:streams",
         "@rome//rome/colosseum:workload_driver",
         "@rome//rome/logging",
         "@rome//rome/metrics:summary",

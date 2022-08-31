@@ -7,20 +7,22 @@
 #include <memory>
 #include <thread>
 
-#include "src/node/connection_manager.h"
-#include "src/node/remote_ptr.h"
-#include "src/qplock/util.h"
+#include "rome/rdma/connection_manager/connection_manager.h"
+#include "rome/rdma/memory_pool/remote_ptr.h"
+#include "util.h"
 
 constexpr int kInitBudget = 5;
 
 namespace X {
+
+using ::rome::rdma::RemoteObjectProto;
 
 RdmaMcsLock::RdmaMcsLock(MemoryPool::Peer self,
                          std::unique_ptr<MemoryPool::cm_type> cm)
     : self_(self), pool_(self, std::move(cm)) {}
 
 absl::Status RdmaMcsLock::Init(MemoryPool::Peer host,
-                               const std::vector<MemoryPool::Peer>& peers) {
+                               const std::vector<MemoryPool::Peer> &peers) {
   is_host_ = self_.id == host.id;
   auto capacity = sizeof(Descriptor) + 2 * sizeof(remote_ptr<Descriptor>);
   auto status = pool_.Init(capacity, peers);
@@ -28,7 +30,7 @@ absl::Status RdmaMcsLock::Init(MemoryPool::Peer host,
 
   // Reserve remote memory for the local descriptor.
   desc_pointer_ = pool_.Allocate<Descriptor>();
-  descriptor_ = reinterpret_cast<Descriptor*>(desc_pointer_.address());
+  descriptor_ = reinterpret_cast<Descriptor *>(desc_pointer_.address());
   ROME_DEBUG("Descriptor @ {:x}", static_cast<uint64_t>(desc_pointer_));
 
   if (is_host_) {
@@ -38,7 +40,7 @@ absl::Status RdmaMcsLock::Init(MemoryPool::Peer host,
     proto.set_raddr(lock_pointer_.address());
 
     *(std::to_address(lock_pointer_)) = remote_ptr<Descriptor>(0);
-    for (const auto& p : peers) {
+    for (const auto &p : peers) {
       auto conn_or = pool_.connection_manager()->GetConnection(p.id);
       ROME_CHECK_OK(ROME_RETURN(conn_or.status()), conn_or);
       status = conn_or.value()->channel()->Send(proto);
@@ -114,7 +116,7 @@ void RdmaMcsLock::Unlock() {
     while (descriptor_->next == remote_nullptr)
       ;
     std::atomic_thread_fence(std::memory_order_acquire);
-    auto next = const_cast<remote_ptr<Descriptor>&>(descriptor_->next);
+    auto next = const_cast<remote_ptr<Descriptor> &>(descriptor_->next);
     ROME_DEBUG("[Unlock] Passing: {} w/ budget={:x} (id={})",
                static_cast<uint64_t>(descriptor_->next.id()),
                descriptor_->budget - 1,
@@ -128,4 +130,4 @@ void RdmaMcsLock::Unlock() {
   }
 }
 
-}  // namespace X
+} // namespace X

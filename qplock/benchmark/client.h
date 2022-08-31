@@ -8,7 +8,7 @@
 
 #include "benchmarks/qplock/setup.h"
 #include "rome/colosseum/qps_controller.h"
-#include "rome/colosseum/streams.h"
+#include "rome/colosseum/streams/streams.h"
 #include "rome/colosseum/workload_driver.h"
 #include "rome/util/clocks.h"
 #include "src/node/connection_manager.h"

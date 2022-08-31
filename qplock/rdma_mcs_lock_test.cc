@@ -127,7 +127,7 @@ TEST_F(RdmaMcsLockTest, MutlipleLocksAndUnlocks) {
 }
 
 TEST_F(RdmaMcsLockTest, MultipleConcurrentLockers) {
-  constexpr int kNumClients = 50;
+  constexpr int kNumClients = 5;
 
   for (int i = 1; i <= kNumClients; ++i) {
     peer_type p{static_cast<uint16_t>(i), kIpAddress2,

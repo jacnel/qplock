@@ -28,7 +28,7 @@ RdmaMcsLock::RdmaMcsLock(MemoryPool::Peer self,
 absl::Status RdmaMcsLock::Init(MemoryPool::Peer host,
                                const std::vector<MemoryPool::Peer> &peers) {
   is_host_ = self_.id == host.id;
-  auto capacity = sizeof(Descriptor) + 2 * sizeof(remote_ptr<Descriptor>);
+  auto capacity = 1 << 20;
   auto status = pool_.Init(capacity, peers);
   ROME_CHECK_OK(ROME_RETURN(status), status);
 
@@ -87,7 +87,9 @@ void RdmaMcsLock::Lock() {
   auto prev =
       pool_.AtomicSwap(lock_pointer_, static_cast<uint64_t>(desc_pointer_));
   if (prev != remote_nullptr) {
-    prev += 64;
+    auto temp_ptr = remote_ptr<uint8_t>(prev);
+    temp_ptr += 64;
+    prev = remote_ptr<Descriptor>(temp_ptr);
     pool_.Write<remote_ptr<Descriptor>>(
         static_cast<remote_ptr<remote_ptr<Descriptor>>>(prev), desc_pointer_,
         prealloc_);

@@ -121,11 +121,6 @@ void RdmaMcsLock::Unlock() {
       ;
     std::atomic_thread_fence(std::memory_order_acquire);
     auto next = const_cast<remote_ptr<Descriptor> &>(descriptor_->next);
-    // ROME_DEBUG("[Unlock] Passing: {} w/ budget={:x} (id={})",
-    //            static_cast<uint64_t>(
-    //                ((remote_ptr<Descriptor>*)descriptor_)->next.id())),
-    //            descriptor_->budget - 1,
-    //            static_cast<uint64_t>(desc_pointer_.id()));
     pool_.Write<uint64_t>(static_cast<remote_ptr<uint64_t>>(next),
                           descriptor_->budget - 1,
                           static_cast<remote_ptr<uint64_t>>(prealloc_));

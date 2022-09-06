@@ -46,7 +46,7 @@ private:
   MemoryPool::Peer self_;
   MemoryPool pool_;
 
-  remote_ptr<remote_ptr<Descriptor>> lock_pointer_;
+  remote_ptr<remote_ptr<Descriptor>> lock_pointer_; //equivalent to glock in paper 
   remote_ptr<Descriptor> desc_pointer_;
   remote_ptr<remote_ptr<Descriptor>> prealloc_;
 

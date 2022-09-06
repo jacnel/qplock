@@ -28,6 +28,7 @@ RdmaMcsLock::RdmaMcsLock(MemoryPool::Peer self,
 absl::Status RdmaMcsLock::Init(MemoryPool::Peer host,
                                const std::vector<MemoryPool::Peer> &peers) {
   is_host_ = self_.id == host.id;
+  // Capacity may need to change
   auto capacity = 1 << 20;
   auto status = pool_.Init(capacity, peers);
   ROME_CHECK_OK(ROME_RETURN(status), status);

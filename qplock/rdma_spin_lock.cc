@@ -26,7 +26,6 @@ RdmaSpinLock::RdmaSpinLock(MemoryPool::Peer self,
 absl::Status RdmaSpinLock::Init(MemoryPool::Peer host,
                     const std::vector<MemoryPool::Peer> &peers) {
     is_host_ = self_.id == host.id;
-    // auto capacity = 2 * sizeof(uint64_t);
     auto capacity = 1 << 20;
     auto status = pool_.Init(capacity, peers);
     ROME_CHECK_OK(ROME_RETURN(status), status);

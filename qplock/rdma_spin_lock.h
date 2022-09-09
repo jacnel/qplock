@@ -13,8 +13,6 @@
 
 namespace X {
 
-// using Peer = MemoryPool::Peer;
-
 using ::rome::rdma::ConnectionManager;
 using ::rome::rdma::MemoryPool;
 using ::rome::rdma::remote_nullptr;
@@ -39,13 +37,10 @@ private:
   bool is_host_;
 
   MemoryPool::Peer self_;
-  // Peer host_;
   MemoryPool pool_;
 
   remote_ptr<uint64_t> lock_;
   remote_ptr<uint64_t> local_;
-
-  // MemoryPool::cm_type *cm_;
 };
 
 } // namespace X

@@ -9,7 +9,7 @@
 
 #include "util.h"
 
-namespace sync {
+namespace X {
 
 class McsLock {
   struct Descriptor {
@@ -31,4 +31,4 @@ class McsLock {
   static thread_local Descriptor local_desc_;
 };
 
-}  // namespace sync
+}  // namespace X

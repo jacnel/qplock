@@ -31,7 +31,16 @@ cc_library(
         "@rome//rome/rdma/connection_manager",
         "@rome//rome/rdma/memory_pool",
         "@rome//rome/rdma/memory_pool:remote_ptr",
-        # "@absl//absl/status",
+    ],
+)
+
+cc_library(
+    name = "mcs_lock",
+    srcs = ["mcs_lock.cc"],
+    hdrs = ["mcs_lock.h"],
+    visibility = ["//visibility:public"],
+    deps = [":util",
+            "@rome//rome/logging",
     ],
 )
 
@@ -49,6 +58,15 @@ cc_test(
     srcs = ["rdma_spin_lock_test.cc"],
     deps = [
         ":rdma_spin_lock",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "mcs_lock_test",
+    srcs = ["mcs_lock_test.cc"],
+    deps = [
+        ":mcs_lock",
         "@gtest//:gtest_main",
     ],
 )

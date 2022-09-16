@@ -44,6 +44,21 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "qplock",
+    srcs = ["qplock.cc"],
+    hdrs = ["qplock.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":util",
+        "@rome//rome/rdma:rdma_memory",
+        "@rome//rome/rdma/channel:sync_accessor",
+        "@rome//rome/rdma/connection_manager",
+        "@rome//rome/rdma/memory_pool",
+        "@rome//rome/rdma/memory_pool:remote_ptr",
+    ],
+)
+
 cc_test(
     name = "rdma_mcs_lock_test",
     srcs = ["rdma_mcs_lock_test.cc"],

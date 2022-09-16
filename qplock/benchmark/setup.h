@@ -5,20 +5,19 @@
 #include <memory>
 
 #include "absl/status/status.h"
-#include "benchmarks/qplock/experiment.pb.h"
-#include "benchmarks/qplock/setup.h"
+#include "qplock/benchmark/experiment.pb.h"
 #include "rome/colosseum/client_adaptor.h"
 #include "rome/colosseum/streams/streams.h"
 #include "rome/logging/logging.h"
 #include "rome/metrics/counter.h"
 #include "rome/rdma/channel/sync_accessor.h"
 #include "rome/util/status_util.h"
-#include "src/node/cloudlab_node.h"
-#include "src/node/connection.h"
-#include "src/node/connection_manager.h"
-#include "src/node/memory_pool.h"
-#include "src/qplock/rdma_mcs_lock.h"
-#include "src/qplock/rdma_spin_lock.h"
+#include "rome/node/cloudlab_node.h"
+#include "rome/rdma/connection_manager/connection.h"
+#include "rome/rdma/connection_manager/connection_manager.h"
+#include "rome/rdma/memory_pool/memory_pool.h"
+#include "qplock/rdma_mcs_lock.h"
+#include "qplock/rdma_spin_lock.h"
 
 #ifdef __cpp_lib_hardware_interference_size
 using std::hardware_constructive_interference_size;
@@ -33,11 +32,11 @@ constexpr std::size_t hardware_destructive_interference_size = 64;
 using ::rome::ClientAdaptor;
 using ::rome::Stream;
 using ::rome::metrics::Counter;
-using ::X::CloudlabNode;
-using ::X::RemoteObjectProto;
-using Peer = ::X::MemoryPool::Peer;
-using cm_type = ::X::MemoryPool::cm_type;
-using conn_type = ::X::MemoryPool::conn_type;
+using ::rome::CloudlabNode;
+using ::rome::rdma::RemoteObjectProto;
+using Peer = ::rome::rdma::MemoryPool::Peer;
+using cm_type = ::rome::rdma::MemoryPool::cm_type;
+using conn_type = ::rome::rdma::MemoryPool::conn_type;
 
 #ifdef QPLOCK_LOCK_TYPE
 using LockType = QPLOCK_LOCK_TYPE;

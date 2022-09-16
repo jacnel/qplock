@@ -1,0 +1,3 @@
+node0,clnode295,r6525	
+node1,clnode309,r6525		
+node2,clnode299,r6525

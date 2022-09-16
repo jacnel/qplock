@@ -16,8 +16,8 @@
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/status/status.h"
-// #include "benchmarks/qplock/experiment.pb.h"
-#include "client.h"
+#include "benchmarks/qplock/experiment.pb.h"
+#include "benchmark/client.h"
 #include "google/protobuf/text_format.h"
 #include "rome/colosseum/client_adaptor.h"
 #include "rome/colosseum/qps_controller.h"
@@ -27,8 +27,8 @@
 #include "rome/metrics/summary.h"
 #include "rome/rdma/rdma_broker.h"
 #include "rome/util/clocks.h"
-#include "server.h"
-#include "setup.h"
+#include "benchmark/server.h"
+#include "benchmark/setup.h"
 #include "rome/node/cloudlab_node.h"
 #include "rome/node/cluster_config.h"
 
@@ -51,7 +51,7 @@ ABSL_FLAG(std::string, nodes, {},
 ABSL_FLAG(ExperimentParams, experiment_params, {}, "Experimental parameters");
 
 using ::util::SystemClock;
-using ::rome::NodefileClusterConfig;
+using ::X::NodefileClusterConfig;
 
 std::function<void(int)> signal_handler_internal;
 void signal_handler(int signum) { signal_handler_internal(signum); }
@@ -136,13 +136,13 @@ int main(int argc, char* argv[]) {
 
         auto node = iter->second;
         client_threads.emplace_back([=, &client_barrier]() {
-          auto client = Client::Create(
+          auto client = McsLockClient::Create(
               Peer{static_cast<uint16_t>(node.id()),
                      std::string(node.private_hostname()),
                      static_cast<uint16_t>(kBaseClientPort + node.id())},
               host, peers, experiment_params, &client_barrier);
           ROME_ASSERT_OK(
-              Client::Run(std::move(client), experiment_params, &done));
+              McsLockClient::Run(std::move(client), experiment_params, &done));
         });
       }
 

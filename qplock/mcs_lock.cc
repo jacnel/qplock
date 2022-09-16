@@ -1,8 +1,15 @@
 #include "mcs_lock.h"
 
-#include "benchmarks/qplock/util.h"
+#include <infiniband/verbs.h>
 
-namespace sync {
+#include <atomic>
+#include <cstdint>
+#include <memory>
+#include <thread>
+
+#include "util.h"
+
+namespace X {
 
 void McsLock::Lock() {
   // to acquire the lock a thread atomically appends its own local node at the
@@ -56,4 +63,4 @@ bool McsLock::IsLocked() { return tail_ != nullptr; }
 
 thread_local McsLock::Descriptor McsLock::local_desc_ = McsLock::Descriptor{};
 
-}  // namespace sync
+}  // namespace X

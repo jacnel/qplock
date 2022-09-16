@@ -1,0 +1,14 @@
+[launch]
+user = adb321
+cmd_prefix = cd qplock_rome && 
+save_root = /users/adb321/qplock_rome/bazel-bin/qplock/benchmark/spinlock_study/main.runfiles/__main__/
+dest_root = /home/amanda/qplock_rome/qplock/qplock/benchmark/spinlock_study/
+bazel_bin = /users/adb321/go/bin/bazelisk
+
+[setup]
+save_dir = results
+
+[workload]
+access_params = size: 8 start: 0 end: 8 capacity: 4096 weights: {read: 0 write:0 cas: 1} start_mode: kFaithful
+step_params = type: kCircular circular: {stride: 0}
+experiment_params = runtime: 10 max_qps: -1 sampling_rate_ms: 50 save_dir: "${setup:save_dir}"

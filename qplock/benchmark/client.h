@@ -6,26 +6,26 @@
 #include <memory>
 #include <unordered_map>
 
-#include "benchmarks/qplock/setup.h"
+#include "setup.h"
 #include "rome/colosseum/qps_controller.h"
 #include "rome/colosseum/streams/streams.h"
 #include "rome/colosseum/workload_driver.h"
 #include "rome/util/clocks.h"
-#include "src/node/connection_manager.h"
-#include "src/qplock/rdma_mcs_lock.h"
-#include "src/qplock/rdma_spin_lock.h"
+#include "rome/rdma/connection_manager/connection_manager.h"
+#include "qplock/rdma_mcs_lock.h"
+#include "qplock/rdma_spin_lock.h"
 
 class Client : public ClientAdaptor<rome::NoOp> {
  public:
-  static std::unique_ptr<McsLockClient> Create(
+  static std::unique_ptr<Client> Create(
       const Peer& self, const Peer& server,
       const std::vector<Peer>& peers,
       const ExperimentParams& experiment_params, std::barrier<>* barrier) {
-    return std::unique_ptr<McsLockClient>(
-        new McsLockClient(self, server, peers, experiment_params, barrier));
+    return std::unique_ptr<Client>(
+        new Client(self, server, peers, experiment_params, barrier));
   }
 
-  static absl::Status Run(std::unique_ptr<McsLockClient> client,
+  static absl::Status Run(std::unique_ptr<Client> client,
                           const ExperimentParams& experiment_params,
                           volatile bool* done) {
     // Setup qps_controller.
@@ -80,7 +80,7 @@ class Client : public ClientAdaptor<rome::NoOp> {
       std::ofstream file;
       std::filesystem::path outfile;
       outfile /= save_dir;
-      outfile /= BuildOutfileName(client_ptr->self_.id, experiment_params);
+      outfile /= BuildResultName(client_ptr->self_.id, experiment_params);
       file.open(outfile);
       ROME_ASSERT(file.is_open(), "Failed to open output file: {}",
                   outfile.c_str());

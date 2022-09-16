@@ -4,12 +4,12 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "benchmarks/qplock/experiment.pb.h"
-#include "benchmarks/qplock/setup.h"
-#include "src/node/connection_manager.h"
-#include "src/node/memory_pool.h"
-#include "src/qplock/rdma_mcs_lock.h"
-#include "src/qplock/rdma_spin_lock.h"
+#include "qplock/benchmark/experiment.pb.h"
+#include "setup.h"
+#include "rome/rdma/connection_manager/connection_manager.h"
+#include "rome/rdma/memory_pool/memory_pool.h"
+#include "qplock/rdma_mcs_lock.h"
+#include "qplock/rdma_spin_lock.h"
 
 class Server {
  public:

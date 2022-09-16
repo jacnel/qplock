@@ -70,6 +70,7 @@ class Node:
 
 __utah__ = ["xl170", "c6525-100g"]
 __emulab__ = ["r320"]
+__clemson__ = ["r6525"]
 
 
 def build_hostname(node):
@@ -77,6 +78,8 @@ def build_hostname(node):
         return node.publ_name + ".utah.cloudlab.us"
     elif node.type in __emulab__:
         return node.publ_name + ".apt.emulab.net"
+    elif node.type in __clemson__:
+        return node.publ_name + "clemson.cloudlab.us"
     else:
         abort()
 
@@ -86,7 +89,7 @@ def build_ssh_command(node):
 
 
 def build_common_command():
-    return launch["cmd_prefix"] + (' ' if len(launch["cmd_prefix"]) > 0 else '') + launch["bazel_bin"] + ' ' + FLAGS.bazel_run + ' //src/benchmark/access_study:main -- '
+    return launch["cmd_prefix"] + (' ' if len(launch["cmd_prefix"]) > 0 else '') + launch["bazel_bin"] + ' ' + FLAGS.bazel_run + ' //qplock/benchmark/spinlock_study:main -- '
 
 
 def make_one_line(proto):

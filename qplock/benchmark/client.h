@@ -6,28 +6,30 @@
 #include <memory>
 #include <unordered_map>
 
-#include "setup.h"
+#include "qplock/rdma_mcs_lock.h"
+#include "qplock/rdma_spin_lock.h"
 #include "rome/colosseum/qps_controller.h"
 #include "rome/colosseum/streams/streams.h"
 #include "rome/colosseum/workload_driver.h"
-#include "rome/util/clocks.h"
 #include "rome/rdma/connection_manager/connection_manager.h"
-#include "qplock/rdma_mcs_lock.h"
-#include "qplock/rdma_spin_lock.h"
+#include "rome/rdma/memory_pool/memory_pool.h"
+#include "rome/util/clocks.h"
+#include "setup.h"
+
+using ::rome::rdma::MemoryPool;
 
 class Client : public ClientAdaptor<rome::NoOp> {
- public:
-  static std::unique_ptr<Client> Create(
-      const Peer& self, const Peer& server,
-      const std::vector<Peer>& peers,
-      const ExperimentParams& experiment_params, std::barrier<>* barrier) {
+public:
+  static std::unique_ptr<Client>
+  Create(const Peer &self, const Peer &server, const std::vector<Peer> &peers,
+         const ExperimentParams &experiment_params, std::barrier<> *barrier) {
     return std::unique_ptr<Client>(
         new Client(self, server, peers, experiment_params, barrier));
   }
 
-  static absl::Status Run(std::unique_ptr<Client> client,
-                          const ExperimentParams& experiment_params,
-                          volatile bool* done) {
+  static absl::StatusOr<ResultProto>
+  Run(std::unique_ptr<Client> client, const ExperimentParams &experiment_params,
+      volatile bool *done) {
     // Setup qps_controller.
     std::unique_ptr<rome::LeakyTokenBucketQpsController<util::SystemClock>>
         qps_controller;
@@ -37,7 +39,7 @@ class Client : public ClientAdaptor<rome::NoOp> {
               experiment_params.max_qps());
     }
 
-    auto* client_ptr = client.get();
+    auto *client_ptr = client.get();
 
     // Create and start the workload driver (also starts client).
     auto driver = rome::WorkloadDriver<rome::NoOp>::Create(
@@ -66,35 +68,35 @@ class Client : public ClientAdaptor<rome::NoOp> {
     result.mutable_client()->CopyFrom(client_ptr->ToProto());
     result.mutable_driver()->CopyFrom(driver->ToProto());
 
-    if (experiment_params.has_save_dir()) {
-      auto save_dir = experiment_params.save_dir();
-      if (save_dir.empty()) {
-        save_dir = client_ptr->self_.address;
-      }
+    // if (experiment_params.has_save_dir()) {
+    //   auto save_dir = experiment_params.save_dir();
+    //   if (save_dir.empty()) {
+    //     save_dir = client_ptr->self_.address;
+    //   }
 
-      while (!std::filesystem::exists(save_dir) &&
-             !std::filesystem::create_directories(save_dir)) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-      }
+    //   while (!std::filesystem::exists(save_dir) &&
+    //          !std::filesystem::create_directories(save_dir)) {
+    //     std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    //   }
 
-      std::ofstream file;
-      std::filesystem::path outfile;
-      outfile /= save_dir;
-      outfile /= BuildResultName(client_ptr->self_.id, experiment_params);
-      file.open(outfile);
-      ROME_ASSERT(file.is_open(), "Failed to open output file: {}",
-                  outfile.c_str());
-      file << result.DebugString();
-      file.close();
-    } else {
-      std::cout << result.DebugString();
-    }
+    //   std::ofstream file;
+    //   std::filesystem::path outfile;
+    //   outfile /= save_dir;
+    //   outfile /= BuildResultName(client_ptr->self_.id, experiment_params);
+    //   file.open(outfile);
+    //   ROME_ASSERT(file.is_open(), "Failed to open output file: {}",
+    //               outfile.c_str());
+    //   file << result.DebugString();
+    //   file.close();
+    // } else {
+    //   std::cout << result.DebugString();
+    // }
 
     // Sleep for a hot sec to let the server receive the messages sent by the
     // clients before disconnecting.
     // (see https://github.com/jacnel/project-x/issues/15)
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    return absl::OkStatus();
+    return result;
   }
 
   absl::Status Start() override {
@@ -104,7 +106,7 @@ class Client : public ClientAdaptor<rome::NoOp> {
     return status;
   }
 
-  absl::Status Apply(const rome::NoOp& op) override {
+  absl::Status Apply(const rome::NoOp &op) override {
     lock_.Lock();
     auto start = util::SystemClock::now();
     if (experiment_params_.has_think_time_us()) {
@@ -118,41 +120,35 @@ class Client : public ClientAdaptor<rome::NoOp> {
 
   absl::Status Stop() override {
     // Announce done.
-    Status s;
-    s.set_state(State::DONE);
-    auto conn = connection_manager_.GetConnection(host_.id);
+    auto conn = pool_.connection_manager()->GetConnection(host_.id);
     ROME_CHECK_OK(ROME_RETURN(util::InternalErrorBuilder()
                               << "Failed to retrieve server connection"),
                   conn);
-    auto sent = conn.value()->channel()->Send(s);
+    auto e = AckProto();
+    auto sent = conn.value()->channel()->Send(e);
 
     // Wait for all other clients.
     barrier_->arrive_and_wait();
     return absl::OkStatus();
   }
 
-  ClientProto ToProto() {
-    ClientProto client;
-    *(client.mutable_host()) = self_.address;
-    *(client.mutable_id()) = std::to_string(self_.id);
+  NodeProto ToProto() {
+    NodeProto client;
+    *client.mutable_host() = self_.address;
+    client.set_id(self_.id);
+    client.set_port(self_.port);
     return client;
   }
 
- private:
-  Client(const Peer& self, const Peer& host,
-                const std::vector<Peer>& peers,
-                const ExperimentParams& experiment_params,
-                std::barrier<>* barrier)
-      : experiment_params_(experiment_params),
-        self_(self),
-        host_(host),
-        peers_(peers),
-        barrier_(barrier),
-        connection_manager_(self.id),
-        lock_(self_, &connection_manager_) {}
+private:
+  Client(const Peer &self, const Peer &host, const std::vector<Peer> &peers,
+         const ExperimentParams &experiment_params, std::barrier<> *barrier)
+      : experiment_params_(experiment_params), self_(self), host_(host),
+        peers_(peers), barrier_(barrier),
+        pool_(self_, std::make_unique<cm_type>(self.id)), lock_(self_, pool_) {}
 
-  static std::string BuildResultName(
-      uint32_t id, const ExperimentParams& experiment_params) {
+  static std::string
+  BuildResultName(uint32_t id, const ExperimentParams &experiment_params) {
     std::stringstream ss;
     ss << experiment_params.name() << "-";
     ss << "i" << id;
@@ -169,8 +165,8 @@ class Client : public ClientAdaptor<rome::NoOp> {
   const Peer self_;
   const Peer host_;
   std::vector<Peer> peers_;
-  std::barrier<>* barrier_;
+  std::barrier<> *barrier_;
 
-  cm_type connection_manager_;
+  MemoryPool pool_;
   LockType lock_;
 };

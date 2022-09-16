@@ -45,11 +45,11 @@ cc_library(
     deps = [
         ":experiment_cc_proto",
         ":setup",
-        "@rome//rome/rdma/connection_manager",
         "//qplock:rdma_mcs_lock",
         "//qplock:rdma_spin_lock",
         "@absl//absl/status",
         "@absl//absl/status:statusor",
+        "@rome//rome/rdma/connection_manager",
     ],
 )
 
@@ -114,19 +114,18 @@ cc_binary(
         ":experiment_cc_proto",
         ":server",
         ":setup",
-        "@rome//rome/node:cloudlab_node",
-        "@rome//rome/node:cluster_config",
-        "@rome//rome/rdma/connection_manager",
         "@absl//absl/flags:flag",
         "@absl//absl/flags:parse",
         "@absl//absl/status",
         "@absl//absl/status:statusor",
         "@rome//rome/colosseum:client_adaptor",
         "@rome//rome/colosseum:qps_controller",
-        "@rome//rome/colosseum/streams:streams",
         "@rome//rome/colosseum:workload_driver",
+        "@rome//rome/colosseum/streams",
         "@rome//rome/logging",
         "@rome//rome/metrics:summary",
+        "@rome//rome/rdma/connection_manager",
+        "@rome//rome/util:proto_util",
     ],
 )
 

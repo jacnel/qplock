@@ -12,7 +12,6 @@
 #include "rome/metrics/counter.h"
 #include "rome/rdma/channel/sync_accessor.h"
 #include "rome/util/status_util.h"
-#include "rome/node/cloudlab_node.h"
 #include "rome/rdma/connection_manager/connection.h"
 #include "rome/rdma/connection_manager/connection_manager.h"
 #include "rome/rdma/memory_pool/memory_pool.h"
@@ -32,7 +31,6 @@ constexpr std::size_t hardware_destructive_interference_size = 64;
 using ::rome::ClientAdaptor;
 using ::rome::Stream;
 using ::rome::metrics::Counter;
-using ::rome::CloudlabNode;
 using ::rome::rdma::RemoteObjectProto;
 using Peer = ::rome::rdma::MemoryPool::Peer;
 using cm_type = ::rome::rdma::MemoryPool::cm_type;
@@ -46,41 +44,6 @@ using LockType = QPLOCK_LOCK_TYPE;
 
 static constexpr uint16_t kServerPort = 18000;
 static constexpr uint16_t kBaseClientPort = 18001;
-
-// Encodes the role of each participant in the system. In this case, we only
-// have a single server and several clients. Hence, the types are either
-// `Type::kServer` or `Type::kClient`.
-class Role {
- public:
-  enum class Type {
-    kServer,
-    kClient,
-  };
-
-  Type type() const { return type_; }
-
-  void ParseFromString(std::string_view input) {
-    if (input == "kServer") {
-      type_ = Type::kServer;
-    } else if (input == "kClient") {
-      type_ = Type::kClient;
-    } else {
-      ROME_FATAL("Uknown type: {}", input);
-    }
-  }
-
-  std::string DebugString() const {
-    if (type_ == Type::kServer) {
-      return "kServer";
-    } else {
-      return "kClient";
-    }
-  }
-
- private:
-  Type type_;
-};
-using Node = CloudlabNode<Role>;
 
 inline absl::Status ValidateExperimentParams(ExperimentParams* params) {
   ROME_CHECK_QUIET(ROME_RETURN(util::FailedPreconditionErrorBuilder()

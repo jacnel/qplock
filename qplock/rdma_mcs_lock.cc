@@ -21,9 +21,8 @@ using ::rome::rdma::remote_nullptr;
 using ::rome::rdma::remote_ptr;
 using ::rome::rdma::RemoteObjectProto;
 
-RdmaMcsLock::RdmaMcsLock(MemoryPool::Peer self,
-                         std::unique_ptr<MemoryPool::cm_type> cm)
-    : self_(self), pool_(self, std::move(cm)) {}
+RdmaMcsLock::RdmaMcsLock(MemoryPool::Peer self, MemoryPool& pool)
+    : self_(self), pool_(pool) {}
 
 absl::Status RdmaMcsLock::Init(MemoryPool::Peer host,
                                const std::vector<MemoryPool::Peer> &peers) {

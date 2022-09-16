@@ -3,20 +3,23 @@ syntax = "proto2";
 import "protos/metrics.proto";
 import "protos/colosseum.proto";
 
-enum State {
-  READY = 0;
-  DONE = 1;
-  ERROR = 2;
+enum Mode {
+  SERVER = 0;
+  CLIENT = 1;
 };
 
-message Status {
-  optional State state = 1; 
+message NodeProto {
+  optional uint32 id = 1;
+  optional string host = 2;
+  optional uint32 port = 3;
 };
 
-message ClientProto {
-  optional string host = 1;
-  optional string id = 2;
+message ClusterProto {
+  optional NodeProto server = 1;
+  repeated NodeProto clients = 2;
 };
+
+message AckProto {};
 
 enum Lock {
   QPLOCK = 0;
@@ -28,7 +31,7 @@ message ExperimentParams {
   optional string name = 1;
 
   // The mode determining how to run the benchmark (i.e., "client" or "server")
-  optional string mode = 2;
+  optional Mode mode = 2;
 
   // A list of client ids to run on this node when running in client mode
   repeated uint32 client_ids = 4;
@@ -62,6 +65,6 @@ message ExperimentParams {
 
 message ResultProto {
   optional ExperimentParams experiment_params = 1;
-  optional ClientProto client = 2;
+  optional NodeProto client = 2;
   optional rome.WorkloadDriverProto driver = 3;
 };

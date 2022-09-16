@@ -7,3 +7,5 @@ bazel-*
 compile_commands.json
 # Directory where clangd puts its indexing work
 .cache/
+
+.gdb_history

@@ -23,21 +23,21 @@ class RdmaSpinLock {
 public:
   using conn_type = MemoryPool::conn_type;
 
-  RdmaSpinLock(MemoryPool::Peer self, std::unique_ptr<MemoryPool::cm_type> cm);
+  RdmaSpinLock(MemoryPool::Peer self, MemoryPool &pool);
 
   absl::Status Init(MemoryPool::Peer host,
                     const std::vector<MemoryPool::Peer> &peers);
-  
+
   bool IsLocked();
   void Lock();
-  void Unlock(); 
+  void Unlock();
 
 private:
   static constexpr uint64_t kUnlocked = 0;
   bool is_host_;
 
   MemoryPool::Peer self_;
-  MemoryPool pool_;
+  MemoryPool &pool_;
 
   remote_ptr<uint64_t> lock_;
   remote_ptr<uint64_t> local_;

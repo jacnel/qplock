@@ -32,7 +32,7 @@ public:
   static_assert(alignof(Descriptor) == 128);
   static_assert(sizeof(Descriptor) == 128);
 
-  RdmaMcsLock(MemoryPool::Peer self, std::unique_ptr<MemoryPool::cm_type> cm);
+  RdmaMcsLock(MemoryPool::Peer self, MemoryPool& pool);
 
   absl::Status Init(MemoryPool::Peer host,
                     const std::vector<MemoryPool::Peer> &peers);
@@ -44,7 +44,7 @@ public:
 private:
   bool is_host_;
   MemoryPool::Peer self_;
-  MemoryPool pool_;
+  MemoryPool &pool_;
 
   remote_ptr<remote_ptr<Descriptor>> lock_pointer_;
   remote_ptr<Descriptor> desc_pointer_;

@@ -1,15 +1,21 @@
 #!/usr/bin/env python
-import subprocess
+import configparser
+import itertools
 import json
+import os
+import subprocess
+import sys
+from math import log
 from multiprocessing import Process
 from os import abort
-import os
-import sys
-from absl import app
-from absl import flags
-import configparser
-import benchmarks.access_study.experiment_pb2 as experiment
-import google.protobuf.text_format as text_format
+from time import sleep
+
+import qplock.benchmark.experiment_pb2 as experiment_pb2
+import pandas
+from absl import app, flags
+from alive_progress import alive_bar
+import qplock.benchmark.plot as plot
+from rome.rome.util.debugpy_util import debugpy_hook
 
 # `launch.py` is a helper script to run experiments remotely. It takes the same input paramters as the underlying script to execute along with additional parameters
 
@@ -18,39 +24,84 @@ FLAGS = flags.FLAGS
 
 # Data collection configuration
 flags.DEFINE_bool(
-    "get_data", False,
-    "Whether or not to print commands to retrieve data from client nodes")
+    'get_data', False,
+    'Whether or not to print commands to retrieve data from client nodes')
+flags.DEFINE_string(
+    'save_root',
+    'qplock/bazel-bin/qplock/benchmark/main.runfiles/qplock',
+    'Directory results are saved under when running')
+flags.DEFINE_string('nodefile', None, 'Path to nodefile',
+                    short_name='n', required=True)
+flags.DEFINE_string('remote_save_dir', 'results', 'Remote save directory')
+flags.DEFINE_string('local_save_dir', 'results', 'Local save directory')
 flags.DEFINE_bool(
-    "generate_experiments", False,
-    "Whether to generate a new experiment file based on a base configuraion.",
-    short_name='g')
+    'plot', False,
+    'Generate plots (should ensure `--get_data` is called first)')
 flags.DEFINE_string(
-    "nodefile", None,
-    "If given then a new set of experiments will be generated using the given nodefile",
-    short_name='n')
-flags.DEFINE_string(
-    "configfile", None,
-    "The name of the configuration file to use when generating or running experiments.",
-    short_name='c', required=True)
-flags.DEFINE_string(
-    "experiment_name", None,
-    "The name of the experiment to run, or the output file when generating a new experiment",
-    short_name='e')
+    'expfile', 'experiments.csv',
+    'Name of file containing experiment configurations to run (if none exists then one is generated)'
+)
 
-flags.DEFINE_string("bazel_run", "run -c opt",
-                    "The run command to pass to Bazel")
+# Workload definition
+flags.DEFINE_multi_string('lock_type', 'mcs', 'Locks to test in experiment')
+flags.DEFINE_multi_integer('think_ns', 500, 'Think times in nanoseconds')
+
+flags.DEFINE_multi_string(
+    'ycsb', 'A', 'YCSB workload (oneof {A, B, C, D, E, R}')
+flags.DEFINE_integer('min_key', 0, 'Minimum key')
+flags.DEFINE_integer('max_key', int(1e6), 'Maximum key')
+flags.DEFINE_float('theta', 0.99, 'Theta in Zipfian distribution')
+flags.DEFINE_bool('stabilize', False, 'Perform deletions to stabilize size')
+flags.DEFINE_integer('min_rq_size', 0, 'Min key range length for scans')
+flags.DEFINE_integer('max_rq_size', 100, 'Max key range length for scans')
+flags.DEFINE_integer('runtime', 10, 'Number of seconds to run experiment')
+flags.DEFINE_bool('read_only_one_sided', True,
+                  'Readonly clients use one-sided RDMA operations')
+
+flags.DEFINE_bool('remote_gets', False, 'Clients use one-sided gets')
+flags.DEFINE_bool('remote_scans', False, 'Clients use one-sided scans')
+
+flags.DEFINE_string('datastore', 'romekv',
+                    'Underlying datastore to use for experiments')
+
+flags.DEFINE_string('ssh_user', 'jacob', '')
+flags.DEFINE_string('ssh_keyfile', '~/.ssh/cloudlab', '')
+flags.DEFINE_string('bazel_flags', '-c opt',
+                    'The run command to pass to Bazel')
+flags.DEFINE_string('bazel_bin', '~/go/bin/bazelisk',
+                    'Location of bazel binary')
+flags.DEFINE_string('bazel_prefix', 'cd sss/qplock &&',
+                    'Command to run before bazel')
+flags.DEFINE_bool('gdb', False, 'Run in gdb')
 
 # Experiment configuration
+flags.DEFINE_integer('server_memory', int(2e9),
+                     'Number of bytes to alloc on server')
+flags.DEFINE_multi_integer(
+    'servers', 1, 'Number of servers in cluster', short_name='s')
+flags.DEFINE_multi_integer(
+    'workers', 0, 'Number of workers to run locally on server',
+    short_name='w')
+flags.DEFINE_multi_integer(
+    'clients', 10, 'Number of clients in cluster', short_name='c')
+
 flags.DEFINE_integer(
-    "max_clients", 11,
-    "The maximum number of clients to run on each node.")
+    'restrict_servers', 0,
+    'Maximum number of nodes to use for servers (0 indicates that as many as possible should be used)')
+flags.DEFINE_integer(
+    'restrict_clients', 0,
+    'Maximum number of nodes to use for clients (0 indicates that as many as possible should be used)')
 
+flags.DEFINE_integer(
+    'port', 18018, 'Port to listen for incoming connections on')
+flags.DEFINE_string('log_dest', '/tmp/romekv/ycsb/logs',
+                    'Name of local log directory for ssh commands')
+flags.DEFINE_boolean(
+    'dry_run', False,
+    'Prints out the commands to run without actually executing them')
+flags.DEFINE_boolean(
+    'debug', False, 'Whether to launch a debugpy server to debug this program')
 
-ID = 0
-PRIV_NAME = 1
-PUBL_NAME = 2
-TYPE = 3
-ROLE = 4
 
 # Parse the experiment file and make it globally accessible
 config = configparser.ConfigParser(
@@ -59,37 +110,153 @@ launch = None
 workload = None
 
 
-class Node:
-    def __init__(self, id, priv_name, publ_name, type, role):
-        self.id = id
-        self.priv_name = priv_name
-        self.publ_name = publ_name
-        self.type = type
-        self.role = role
+def get_ycsb(ycsb):
+    ycsb = ycsb.upper()
+    if ycsb == 'A':
+        return experiment_pb2.Ycsb.A
+    elif ycsb == 'B':
+        return experiment_pb2.Ycsb.B
+    elif ycsb == 'C':
+        return experiment_pb2.Ycsb.C
+    elif ycsb == 'D':
+        return experiment_pb2.Ycsb.D
+    elif ycsb == 'E':
+        return experiment_pb2.Ycsb.E
+    elif ycsb == 'R':
+        return experiment_pb2.Ycsb.R
+    else:
+        assert False, f'Invalid value for flag: --ycsb={ycsb}'
 
 
-__utah__ = ["xl170", "c6525-100g"]
-__emulab__ = ["r320"]
-__clemson__ = ["r6525"]
+__lehigh__ = ['luigi']
+__utah__ = ['xl170', 'c6525-100g', 'c6525-25g']
+__clemson__ = ['r6525']
+__emulab__ = ['r320']
 
 
-def build_hostname(node):
-    if node.type in __utah__:
-        return node.publ_name + ".utah.cloudlab.us"
-    elif node.type in __emulab__:
-        return node.publ_name + ".apt.emulab.net"
-    elif node.type in __clemson__:
-        return node.publ_name + "clemson.cloudlab.us"
+def get_domain(node_type):
+    if node_type in __utah__:
+        return 'utah.cloudlab.us'
+    elif node_type in __clemson__:
+        return 'clemson.cloudlab.us'
+    elif node_type in __emulab__:
+        return 'apt.emulab.net'
+    elif node_type in __lehigh__:
+        return 'cse.lehigh.edu'
     else:
         abort()
 
 
-def build_ssh_command(node):
-    return 'ssh ' + launch["user"] + '@' + build_hostname(node)
+def partition_nodefile(path, n_server_nodes):
+    # Put a server on own machines
+    all_csv = []
+    assert(os.path.exists(path))
+    with open(path, 'r') as __file:
+        all_csv = [line for line in __file]
+    assert n_server_nodes < len(all_csv), "No machines left"
+    if n_server_nodes == -1:  # Conveniece for getting data
+        return all_csv, None
+    servers_csv = all_csv[0:n_server_nodes]
+    clients_csv = all_csv[n_server_nodes:]
+    if FLAGS.restrict_servers > 0:
+        servers_csv = servers_csv[0:FLAGS.restrict_servers]
+    if FLAGS.restrict_clients > 0:
+        clients_csv = clients_csv[0:FLAGS.restrict_clients]
+    return servers_csv, clients_csv
 
 
-def build_common_command():
-    return launch["cmd_prefix"] + (' ' if len(launch["cmd_prefix"]) > 0 else '') + launch["bazel_bin"] + ' ' + FLAGS.bazel_run + ' //qplock/benchmark/spinlock_study:main -- '
+def parse_clients(csv, nid, num_clients):
+    nodes = []
+    name, public_hostname, node_type = csv[0].strip().split(',')
+    nodes.append((name, public_hostname))
+    for line in csv[1:]:
+        name, public_hostname, _ = line.strip().split(',')
+        nodes.append((name, public_hostname))
+
+    proto = experiment_pb2.ClusterProto()
+    proto.node_type = node_type
+    proto.domain = get_domain(node_type)
+    clients = {}
+    for r in range(0, num_clients):
+        i = nid % len(nodes)
+        n = nodes[i]
+        c = experiment_pb2.NodeProto(
+            nid=nid, private_hostname=n[0], public_hostname=n[1],
+            port=FLAGS.port + nid)
+        proto.clients.append(c)
+        if clients.get(n[0]) is None:
+            clients[n[0]] = []
+        clients[n[0]].append(c)
+        nid += 1
+    return proto, clients
+
+
+def parse_servers(csv, nid,  num_servers):
+    nodes = []
+    name, public_hostname, node_type = csv[0].strip().split(',')
+    nodes.append((name, public_hostname))
+    for line in csv[1:]:
+        name, public_hostname, _ = line.strip().split(',')
+        nodes.append((name, public_hostname))
+
+    proto = experiment_pb2.ClusterProto()
+    proto.node_type = node_type
+    proto.domain = get_domain(node_type)
+    servers = {}
+
+    if num_servers == -1:
+        num_servers = len(nodes)
+
+    for _i in range(0, num_servers):
+        i = nid % len(nodes)
+        n = nodes[i]
+        s = experiment_pb2.NodeProto(
+            nid=nid, private_hostname=n[0],
+            public_hostname=n[1],
+            port=FLAGS.port + nid)
+        proto.servers.append(s)
+        if servers.get(n[0]) is None:
+            servers[n[0]] = []
+        servers[n[0]].append(s)
+        nid += 1
+    return proto, servers
+
+
+def build_hostname(name, domain):
+    return '.'.join([name, domain])
+
+
+def build_ssh_command(name, domain):
+    return ' '.join(
+        ['ssh -v -i', FLAGS.ssh_keyfile, FLAGS.ssh_user + '@' +
+         build_hostname(name, domain)])
+
+
+def build_common_command(lock, params, cluster):
+    cmd = FLAGS.bazel_prefix + (' ' if len(FLAGS.bazel_prefix) > 0 else '')
+    cmd = ' '.join([cmd, FLAGS.bazel_bin])
+    if not FLAGS.gdb:
+        cmd = ' '.join([cmd, 'run'])
+        cmd = ' '.join([cmd, FLAGS.bazel_flags])
+        cmd = ' '.join([cmd, '--lock_type=' + lock])
+        cmd = ' '.join([cmd, '//qplock/benchmark:main --'])
+    else:
+        cmd = ' '.join([cmd, 'build'])
+        cmd = ' '.join([cmd, FLAGS.bazel_flags])
+        cmd = ' '.join([cmd, '--lock_type=' + lock])
+        cmd = ' '.join([cmd, '--copt=-g', '--strip=never',
+                        '//qplock/benchmark:main'])
+        cmd = ' '.join([cmd, '&& gdb -ex run -ex bt -ex q -ex y --args',
+                        'bazel-bin/qplock/benchmark/main'])
+        print(cmd)
+    cmd = ' '.join([cmd, '--experiment_params', quote(make_one_line(params))])
+    cmd = ' '.join([cmd, '--cluster', quote(make_one_line(cluster))])
+    return cmd
+
+
+def build_command(ssh_command, run_command):
+    return ' '.join(
+        [ssh_command, '\'' + run_command + '\''])
 
 
 def make_one_line(proto):
@@ -103,193 +270,224 @@ def quote(line):
     return SINGLE_QUOTE + line + SINGLE_QUOTE
 
 
-def build_common_flags(experiment, experiment_params, access_params):
-    nodes = ':'.join(json.loads(config[experiment]['nodes']))
-    return '--nodes ' + quote(nodes) + ' --experiment_params ' + quote(
-        make_one_line(experiment_params)) + ' --access_params ' + quote(
-        make_one_line(access_params))
+def build_save_dir(ycsb):
+    return os.path.join(FLAGS.remote_save_dir, ycsb)
 
 
-def build_server_command(experiment, client_ids):
-    experiment_params = build_experiment_params("kServer", client_ids)
-    experiment_params.name = experiment
-    access_params = build_access_params()
-    return build_common_command() + build_common_flags(experiment,
-                                                       experiment_params, access_params)
+def build_remote_save_dir(ycsb):
+    return os.path.join(
+        FLAGS.save_root, FLAGS.remote_save_dir) + '/*'
 
 
-def build_experiment_params(mode, client_ids):
-    proto = text_format.Parse(
-        workload["experiment_params"], experiment.ExperimentParams())
-    proto.mode = mode
-    proto.client_ids.extend(int(id) for id in client_ids)
+def build_local_save_dir(ycsb, public_hostname):
+    return os.path.join(FLAGS.local_save_dir, ycsb, public_hostname) + '/'
+
+
+# def build_experiment_params(ycsb, workers):
+def fill_experiment_params_common(
+        proto, experiment_name, lock, nservers, nclients, think):
+    proto.name = experiment_name
+    # proto.num_servers = nservers
+    # proto.num_clients = nclients
+    # proto.num_readonly = nreadonly
+    proto.workload.runtime = FLAGS.runtime
+    proto.workload.think_time_ns = think
+    proto.save_dir = build_save_dir(lock)
+    # proto.workload.ycsb = get_ycsb(ycsb)
+    # proto.workload.min_key = FLAGS.min_key
+    # proto.workload.max_key = FLAGS.max_key
+    # proto.workload.theta = FLAGS.theta
+    # proto.workload.stabilize = FLAGS.stabilize
+    # proto.workload.min_rq_size = FLAGS.min_rq_size
+    # proto.workload.max_rq_size = FLAGS.max_rq_size
+    # proto.workload.worker_threads = nworkers
+    # proto.workload.get_one_sided = FLAGS.remote_gets
+    # proto.workload.scan_one_sided = FLAGS.remote_scans
+    # proto.workload.read_only_one_sided = FLAGS.read_only_one_sided if FLAGS.datastore != 'masstree' else False
     return proto
 
 
-def build_access_params():
-    proto = text_format.Parse(
-        workload["access_params"], experiment.AccessParams())
+def build_server_experiment_params(server_id):
+    proto = experiment_pb2.ExperimentParams()
+    proto.mode = experiment_pb2.Mode.SERVER
+    proto.server_id = server_id
     return proto
 
 
-def build_step_params():
-    proto = text_format.Parse(
-        workload["step_params"], experiment.StepParams())
+def build_client_experiment_params(clients):
+    proto = experiment_pb2.ExperimentParams()
+    proto.mode = experiment_pb2.Mode.CLIENT
+    if clients:
+        proto.client_ids.extend(c.nid for c in clients)
     return proto
 
 
-def build_client_command(experiment, nodes):
-    experiment_params = build_experiment_params(
-        "kClient", [n.id for n in nodes])
-    experiment_params.name = experiment
-    access_params = build_access_params()
-    return build_common_command() + build_common_flags(experiment,
-                                                       experiment_params, access_params) + ' --step_params ' + quote(
-        make_one_line(str(build_step_params())))
+def build_get_data_command(ycsb, node, cluster):
+    src = build_remote_save_dir(ycsb)
+    dest = build_local_save_dir(ycsb, node.public_hostname)
+    os.makedirs(dest, exist_ok=True)
+    return 'rsync -aq ' + FLAGS.ssh_user + '@' + build_hostname(
+        node.public_hostname, cluster.domain) + ':' + ' '.join(
+        [src, dest])
 
 
-def build_get_data_command(node):
-    return 'rsync -rq ' + launch["user"] + '@' + build_hostname(node) + ':' + os.path.join(
-        launch["save_root"], config["setup"]["save_dir"]) + '/* ' + os.path.join(launch["dest_root"], config["setup"]["save_dir"],
-                                                                                 node.priv_name) + '/'
+def build_logfile_path(ycsb, experiment_name, mode, node):
+    return os.path.join(
+        FLAGS.log_dest, ycsb, experiment_name, mode, node.public_hostname +
+        '_' + str(node.nid) + '.log')
 
 
-def generate_single_node_scaling(lines):
-    global config
-    # Generate clients on a single nodes
-    experiments = []
-    for i in range(1, FLAGS.max_clients + 1):
-        section = 'n1_c' + str(i)
-        nodes = lines[0:1]
-        for j in range(0, i):
-            nodes.extend([str(j + 1) + ',' + ','.join(lines[1].split(',')[1:])])
-        config.add_section(section)
-        config[section]['nodes'] = '[' + ',\n'.join('"' + n + '"'
-                                                    for n in nodes) + ']'
-        experiments.append(section)
-    return experiments
+def __run__(cmd, outfile, retries):
+    failures = 0
+    with open(outfile, 'w+') as f:
+        # A little hacky, but we have a problem with bots hogging the SSH connections and causing the server to refuse the request.
+        while (failures <= retries):
+            try:
+                subprocess.run(cmd, shell=True, check=True,
+                               stderr=f, stdout=f)
+                return
+            except subprocess.CalledProcessError:
+                failures += 1
+        print(
+            f'\t> Command failed. Check logs: {outfile} (trial {failures}/100)')
 
 
-def generate_ten_node_scaling(lines):
-    global config
-
-    experiments = []
-    for i in range(1, len(lines), 2):
-        # Generate odd numbers of clients, one for each node
-        section = 'n' + str(i)
-        config.add_section(section)
-        config[section]['nodes'] = '[' + ',\n'.join('"' + l + '"'
-                                                    for l in lines[0: i + 1]) + ']'
-        experiments.append(section)
-
-    nclients = len(lines[1:])
-    for i in range(0, FLAGS.max_clients):
-        # Generate some number of clients per node
-        nodes = lines.copy()
-        for j in range(1, i + 1):  # Clients are 1-indexed
-            nodes.extend(
-                [str(id + (j * nclients)) + ',' + ','.join(c.split(',')[1:])
-                 for id, c in zip(range(1, nclients + 1),
-                                  lines[1:])])
-        section = 'n' + str(nclients * (i + 1))
-        config.add_section(section)
-        config[section]['nodes'] = '[' + ',\n'.join(
-            '"' + n + '"' for n in nodes) + ']'
-        experiments.append(section)
-    return experiments
-
-
-def __run__(cmd):
-    print("Running command: {}".format(cmd))
-    subprocess.run(cmd, shell=True, check=True)
-
-
-def main(args):
-    global launch
-    global workload
-
-    config.read(FLAGS.configfile)
-
-    launch = config["launch"]
-    workload = config["workload"]
-
-    if FLAGS.generate_experiments:
-        if FLAGS.nodefile is not None:
-            with open(FLAGS.nodefile) as f:
-                lines = f.read().split('\n')
-                assert len(lines) >= 11, "Nodefile needs at least 11 nodes"
-                for i in range(0, len(lines)):
-                    lines[i] = str(
-                        i) + ',' + lines[i] + ',' + ('kServer' if i == 0 else 'kClient')
-                experiments = []
-                experiments.extend(generate_single_node_scaling(lines))
-                experiments.extend(generate_ten_node_scaling(lines))
-                workload['experiments'] = '[' + ','.join('"' + e + '"'
-                                                         for e in experiments) + ']'
-
-            assert FLAGS.experiment_name is not None
-            path = os.path.join('experiments', FLAGS.experiment_name)
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, 'w') as experimentfile:
-                config.write(experimentfile)
-        else:
-            print("Please provide a nodefile when generating experiments")
-            exit(1)
-
-    experiment_list = {}
-    for experiment in json.loads(workload['experiments']):
-        nodelist = []
-        for node in json.loads(config[experiment]['nodes']):
-            parts = node.split(',')
-            node = Node(
-                parts[ID],
-                parts[PRIV_NAME],
-                parts[PUBL_NAME],
-                parts[TYPE],
-                parts[ROLE])
-            nodelist.append(node)
-
-        # Generate a map of clients and their associated ids
-        nodes = {}
-        client_ids = []
-        for n in nodelist:
-            # Save client ids for the server command
-            if n.role == "kClient":
-                client_ids.append(n.id)
-
-            if (n.priv_name, n.role) not in nodes:
-                nodes[(n.priv_name, n.role)] = [n]
-            else:
-                nodes[(n.priv_name, n.role)].append(n)
-
-        left = len(nodes)
-        if not FLAGS.get_data:
-            experiment_list[experiment] = []
-            for n in nodes:
-                if n[1] == "kServer":
-                    experiment_list[experiment].append(
-                        build_ssh_command(nodes[n][0]) + ' \'' +
-                        build_server_command(experiment, client_ids) + '\'')
-                else:
-                    experiment_list[experiment].append(
-                        build_ssh_command(nodes[n][0]) + ' \'' +
-                        build_client_command(experiment, nodes[n]) + '\'')
-        else:
-            experiment_list['get_data'] = []
-            for client in [n for n in nodelist if n.role == 'kClient']:
-                # print(build_get_data_command(client))
-                experiment_list['get_data'].append(build_get_data_command(client))
-
-    for e in experiment_list:
-        processes = []
-        print("Running experiment: {}".format(e))
-        for c in experiment_list[e]:
-            processes.append(Process(target=__run__, args=(c,)))
+def execute(experiment_name, commands):
+    processes = []
+    for cmd in commands:
+        if not FLAGS.dry_run:
+            os.makedirs(
+                os.path.dirname(cmd[1]),
+                exist_ok=True)
+            processes.append(
+                Process(target=__run__, args=cmd))
             processes[-1].start()
+        else:
+            print(cmd[0])
 
+    if not FLAGS.dry_run:
         for p in processes:
             p.join()
 
 
-if __name__ == "__main__":
+def main(args):
+    debugpy_hook()
+    if FLAGS.get_data:
+        nodes_csv, _ = partition_nodefile(FLAGS.nodefile, -1)
+        cluster_proto, nodes = parse_servers(nodes_csv, 0, len(nodes_csv))
+        commands = []
+        with alive_bar(len(nodes.keys()), title="Getting data...") as bar:
+            for _, nodes in nodes.items():
+                n = nodes[0]
+                # Run servers in separate processes
+                execute('get_data',
+                        [(build_get_data_command(
+                            '', n, cluster_proto),
+                            build_logfile_path('', '', 'get_data', n), 0)])
+                bar()
+    elif FLAGS.plot:
+        datafile = FLAGS.datafile
+        if datafile is None:
+            datafile = '__data__.csv'
+        if not os.path.exists(datafile):
+            plot.generate_csv(FLAGS.local_save_dir, datafile)
+        plot.plot(datafile, FLAGS.ycsb)
+        if FLAGS.datafile is None:
+            os.remove(datafile)
+    else:
+        columns = ['lock', 's',  'c', 't',  'done']
+        experiments = {}
+        if not FLAGS.dry_run and os.path.exists(FLAGS.expfile):
+            experiments = pandas.read_csv(FLAGS.expfile, index_col='row')
+        else:
+            configurations = list(itertools.product(
+                # set(FLAGS.ycsb),
+                set(FLAGS.lock_type),
+                set(FLAGS.servers),
+                set(FLAGS.clients),
+                set(FLAGS.think_ns),
+                [False]))
+            experiments = pandas.DataFrame(configurations, columns=columns)
+            if not FLAGS.dry_run:
+                experiments.to_csv(FLAGS.expfile, mode='w+', index_label='row')
+
+        with alive_bar(int(experiments.shape[0]), title='Running experiments...') as bar:
+            for index, row in experiments.iterrows():
+                if row['done']:
+                    bar()
+                    continue
+
+                # ycsb = row['ycsb']
+                ycsb = ''
+                lock = row['lock']
+                s_count = row['s']
+                c_count = row['c']
+                think = row['t']
+
+                servers_csv, clients_csv = partition_nodefile(
+                    FLAGS.nodefile, s_count)
+                if servers_csv is None:
+                    continue
+                cluster_proto = experiment_pb2.ClusterProto()
+                temp, servers = parse_servers(servers_csv, 0, s_count)
+                cluster_proto.MergeFrom(temp)
+                temp, clients = parse_clients(
+                    clients_csv, len(servers_csv), c_count)
+                cluster_proto.MergeFrom(temp)
+
+                commands = []
+                experiment_name = 'l' + lock + '_s' + str(len(servers)) + '.' + str(
+                    s_count) + '_c' + str(len(clients)) + '.' + str(c_count) + '_t' + str(think)
+                bar.text = f'Lock type: {lock} | Current experiment: {experiment_name}'
+                if not FLAGS.get_data:
+                    for _, server_list in servers.items():
+                        # Run servers in separate processes
+                        for server in server_list:
+                            ssh_command = build_ssh_command(
+                                server.public_hostname, cluster_proto.domain)
+                            params = build_server_experiment_params(
+                                server.nid)
+                            params = fill_experiment_params_common(
+                                params, experiment_name, lock, s_count,
+                                c_count, think)
+                            run_command = build_common_command(
+                                lock, params, cluster_proto)
+                            commands.append((
+                                build_command(
+                                    ssh_command, run_command),
+                                build_logfile_path(
+                                    lock, experiment_name,
+                                    'server', server), 100))
+                    for n in set(clients.keys()):
+                        client_list = clients.get(n)
+                        node = client_list[0]
+                        ssh_command = build_ssh_command(
+                            node.public_hostname,
+                            cluster_proto.domain)
+                        params = build_client_experiment_params(
+                            client_list)
+                        params = fill_experiment_params_common(
+                            params, experiment_name, lock, s_count,
+                            c_count, think)
+                        run_command = build_common_command(
+                            lock, params, cluster_proto)
+                        commands.append((
+                            build_command(
+                                ssh_command, run_command),
+                            build_logfile_path(
+                                lock, experiment_name,
+                                'client',
+                                node), 100))
+
+                    # Execute the commands.
+                    execute(experiment_name, commands)
+                    experiments.at[index, 'done'] = True
+                    experiments.to_csv(FLAGS.expfile, index_label='row')
+                    bar()
+
+        if not FLAGS.dry_run and os.path.exists(FLAGS.expfile):
+            os.remove(FLAGS.expfile)
+
+
+if __name__ == '__main__':
     app.run(main)

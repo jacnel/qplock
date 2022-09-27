@@ -21,7 +21,7 @@ using ::rome::rdma::remote_nullptr;
 using ::rome::rdma::remote_ptr;
 using ::rome::rdma::RemoteObjectProto;
 
-RdmaMcsLock::RdmaMcsLock(MemoryPool::Peer self, MemoryPool& pool)
+RdmaMcsLock::RdmaMcsLock(MemoryPool::Peer self, MemoryPool &pool)
     : self_(self), pool_(pool) {}
 
 absl::Status RdmaMcsLock::Init(MemoryPool::Peer host,
@@ -29,7 +29,7 @@ absl::Status RdmaMcsLock::Init(MemoryPool::Peer host,
   is_host_ = self_.id == host.id;
   auto capacity = 1 << 20;
   auto status = pool_.Init(capacity, peers);
-  ROME_CHECK_OK(ROME_RETURN(status), status);
+  ROME_ASSERT_OK(status);
 
   // Reserve remote memory for the local descriptor.
   desc_pointer_ = pool_.Allocate<Descriptor>();

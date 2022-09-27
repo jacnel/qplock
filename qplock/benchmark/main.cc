@@ -51,7 +51,8 @@ int main(int argc, char *argv[]) {
   auto experiment_params = absl::GetFlag(FLAGS_experiment_params);
   ROME_ASSERT_OK(ValidateExperimentParams(&experiment_params));
 
-  if (!experiment_params.has_runtime() || experiment_params.runtime() < 0) {
+  if (!experiment_params.workload().has_runtime() ||
+      experiment_params.workload().runtime() < 0) {
     signal_handler_internal = std::function([](int signum) {
       if (done)
         exit(1);
@@ -65,26 +66,44 @@ int main(int argc, char *argv[]) {
   experiment_params.set_cluster_size(cluster.clients().size());
   experiment_params.set_num_clients(experiment_params.client_ids().size());
 
-  auto server = Peer((uint16_t)cluster.server().id(), cluster.server().host(),
-                     (uint16_t)cluster.server().port());
+  //! We may want to have multiple servers in the future, but for now we just
+  //! assume the one given by `server_id` in the experiment params.
+  std::vector<Peer> servers;
+  Peer server;
+  for (auto &s : cluster.servers()) {
+    Peer p = Peer((uint16_t)s.nid(), s.private_hostname(), (uint16_t)s.port());
+    if (s.nid() == experiment_params.server_id()) {
+      server = p;
+    }
+    servers.push_back(p);
+  }
   std::vector<Peer> clients;
   std::vector<Peer> peers;
   std::for_each(
       cluster.clients().begin(), cluster.clients().end(), [&](auto &c) {
-        auto p = Peer((uint16_t)c.id(), c.host(), (uint16_t)c.port());
-        std::for_each(experiment_params.client_ids().begin(),
-                      experiment_params.client_ids().end(), [&](auto &id) {
-                        if (id != c.id()) {
-                          peers.push_back(p);
-                        } else {
-                          clients.push_back(p);
-                        }
-                      });
+        auto p =
+            Peer((uint16_t)c.nid(), c.private_hostname(), (uint16_t)c.port());
+
+        if (experiment_params.mode() == Mode::CLIENT) {
+          bool run = false;
+          for (const auto &id : experiment_params.client_ids()) {
+            if (id == c.nid()) {
+              run = true;
+              break;
+            }
+          }
+          if (run) {
+            clients.push_back(p);
+          }
+          peers.push_back(p);
+        } else {
+          clients.push_back(p);
+        }
       });
 
   if (experiment_params.mode() == Mode::SERVER) { // We are server
     auto s = Server::Create(server, clients);
-    auto status = s->Launch(&done, experiment_params.runtime());
+    auto status = s->Launch(&done, experiment_params.workload().runtime());
     ROME_ASSERT_OK(status);
   } else {
     peers.push_back(server);
@@ -92,21 +111,30 @@ int main(int argc, char *argv[]) {
 
     // Launch each of the clients.
     std::vector<std::thread> client_threads;
-    std::vector<std::future<absl::StatusOr<ResultProto>>> results;
+    std::vector<std::future<absl::StatusOr<ResultProto>>> client_tasks;
     std::barrier client_barrier(experiment_params.client_ids().size());
     for (const auto &c : clients) {
-      results.emplace_back(std::async([=, &client_barrier]() {
-        auto client = Client::Create(c, server, peers, experiment_params,
+      client_tasks.emplace_back(std::async([=, &client_barrier]() {
+        std::vector<Peer> others;
+        std::copy_if(peers.begin(), peers.end(), std::back_inserter(others),
+                     [c](auto &p) { return p.id != c.id; });
+        auto client = Client::Create(c, server, others, experiment_params,
                                      &client_barrier);
         return Client::Run(std::move(client), experiment_params, &done);
       }));
     }
 
     // Join clients.
-    for (auto &r : results) {
+    std::vector<ResultProto> results;
+    for (auto &r : client_tasks) {
+      r.wait();
+      ROME_ASSERT(r.valid(), "WTF");
       auto rproto = r.get();
-      ROME_INFO("{}", VALUE_OR_DIE(rproto).DebugString());
+      results.push_back(VALUE_OR_DIE(rproto));
+      // ROME_INFO("{}", VALUE_OR_DIE(rproto).DebugString());
     }
+
+    RecordResults(experiment_params, results);
   }
 
   ROME_INFO("Done");

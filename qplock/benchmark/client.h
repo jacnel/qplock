@@ -49,9 +49,12 @@ public:
     ROME_ASSERT_OK(driver->Start());
 
     // Sleep while driver is running then stop it.
-    if (experiment_params.has_runtime() && experiment_params.runtime() > 0) {
-      ROME_INFO("Running workload for {}s", experiment_params.runtime());
-      auto runtime = std::chrono::seconds(experiment_params.runtime());
+    if (experiment_params.workload().has_runtime() &&
+        experiment_params.workload().runtime() > 0) {
+      ROME_INFO("Running workload for {}s",
+                experiment_params.workload().runtime());
+      auto runtime =
+          std::chrono::seconds(experiment_params.workload().runtime());
       std::this_thread::sleep_for(runtime);
     } else {
       ROME_INFO("Running workload indefinitely");
@@ -68,30 +71,6 @@ public:
     result.mutable_client()->CopyFrom(client_ptr->ToProto());
     result.mutable_driver()->CopyFrom(driver->ToProto());
 
-    // if (experiment_params.has_save_dir()) {
-    //   auto save_dir = experiment_params.save_dir();
-    //   if (save_dir.empty()) {
-    //     save_dir = client_ptr->self_.address;
-    //   }
-
-    //   while (!std::filesystem::exists(save_dir) &&
-    //          !std::filesystem::create_directories(save_dir)) {
-    //     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    //   }
-
-    //   std::ofstream file;
-    //   std::filesystem::path outfile;
-    //   outfile /= save_dir;
-    //   outfile /= BuildResultName(client_ptr->self_.id, experiment_params);
-    //   file.open(outfile);
-    //   ROME_ASSERT(file.is_open(), "Failed to open output file: {}",
-    //               outfile.c_str());
-    //   file << result.DebugString();
-    //   file.close();
-    // } else {
-    //   std::cout << result.DebugString();
-    // }
-
     // Sleep for a hot sec to let the server receive the messages sent by the
     // clients before disconnecting.
     // (see https://github.com/jacnel/project-x/issues/15)
@@ -107,11 +86,13 @@ public:
   }
 
   absl::Status Apply(const rome::NoOp &op) override {
+    ROME_DEBUG("Locking...");
     lock_.Lock();
     auto start = util::SystemClock::now();
-    if (experiment_params_.has_think_time_us()) {
+    if (experiment_params_.workload().has_think_time_ns()) {
       while (util::SystemClock::now() - start <
-             std::chrono::microseconds(experiment_params_.think_time_us()))
+             std::chrono::nanoseconds(
+                 experiment_params_.workload().think_time_ns()))
         ;
     }
     lock_.Unlock();
@@ -119,6 +100,7 @@ public:
   }
 
   absl::Status Stop() override {
+    ROME_DEBUG("Stopping...");
     // Announce done.
     auto conn = pool_.connection_manager()->GetConnection(host_.id);
     ROME_CHECK_OK(ROME_RETURN(util::InternalErrorBuilder()
@@ -134,8 +116,8 @@ public:
 
   NodeProto ToProto() {
     NodeProto client;
-    *client.mutable_host() = self_.address;
-    client.set_id(self_.id);
+    *client.mutable_private_hostname() = self_.address;
+    client.set_nid(self_.id);
     client.set_port(self_.port);
     return client;
   }
@@ -146,19 +128,6 @@ private:
       : experiment_params_(experiment_params), self_(self), host_(host),
         peers_(peers), barrier_(barrier),
         pool_(self_, std::make_unique<cm_type>(self.id)), lock_(self_, pool_) {}
-
-  static std::string
-  BuildResultName(uint32_t id, const ExperimentParams &experiment_params) {
-    std::stringstream ss;
-    ss << experiment_params.name() << "-";
-    ss << "i" << id;
-    ss << "_d" << experiment_params.runtime();
-    if (experiment_params.has_max_qps() && experiment_params.max_qps() > 0) {
-      ss << "_q" << experiment_params.max_qps();
-    }
-    ss << ".pbtxt";
-    return ss.str();
-  }
 
   ExperimentParams experiment_params_;
 

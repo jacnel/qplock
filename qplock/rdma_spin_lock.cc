@@ -27,7 +27,7 @@ absl::Status RdmaSpinLock::Init(MemoryPool::Peer host,
   is_host_ = self_.id == host.id;
   auto capacity = 1 << 20;
   auto status = pool_.Init(capacity, peers);
-  ROME_CHECK_OK(ROME_RETURN(status), status);
+  ROME_ASSERT_OK(status);
 
   if (is_host_) {
     // Send all peers the base address of the lock residing on the host

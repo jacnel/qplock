@@ -32,8 +32,10 @@ protected:
   }
 
   void InitPeer(peer_type peer) {
-    auto cm = std::make_unique<ConnectionManager<Conn::channel_type>>(peer.id);
-    locks_.emplace(peer.id, std::make_unique<RdmaMcsLock>(peer, std::move(cm)));
+    pool_ = std::make_unique<MemoryPool>(
+        peer, std::make_unique<ConnectionManager<Conn::channel_type>>(peer.id));
+    locks_.emplace(peer.id,
+                   std::make_unique<RdmaMcsLock>(peer, *(pool_.get())));
     peers_.push_back(peer);
   }
 
@@ -52,6 +54,7 @@ protected:
 
   const peer_type host_{kHostId, kIpAddress, kHostPort};
 
+  std::unique_ptr<MemoryPool> pool_;
   std::vector<peer_type> peers_;
   std::unordered_map<uint16_t, std::unique_ptr<RdmaMcsLock>> locks_;
 };

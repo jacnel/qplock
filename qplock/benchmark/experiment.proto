@@ -9,21 +9,27 @@ enum Mode {
 };
 
 message NodeProto {
-  optional uint32 id = 1;
-  optional string host = 2;
-  optional uint32 port = 3;
+  optional uint32 nid = 1;
+  optional string public_hostname = 2;
+  optional string private_hostname = 3;
+  optional uint32 port = 4;
 };
 
 message ClusterProto {
-  optional NodeProto server = 1;
+  repeated NodeProto servers = 1;
   repeated NodeProto clients = 2;
+  optional string node_type = 3;
+  optional string domain = 4;
 };
 
 message AckProto {};
 
-enum Lock {
-  QPLOCK = 0;
-  CAS = 1;
+message Workload {
+  // Length of "critical section"
+  optional uint32 think_time_ns = 2;
+
+  // The benchmark length
+  optional int32 runtime = 3;
 };
 
 message ExperimentParams {
@@ -33,11 +39,12 @@ message ExperimentParams {
   // The mode determining how to run the benchmark (i.e., "client" or "server")
   optional Mode mode = 2;
 
+  optional Workload workload = 11;
+
   // A list of client ids to run on this node when running in client mode
   repeated uint32 client_ids = 4;
 
-  // The benchmark length
-  optional int32 runtime = 5;
+  optional uint32 server_id = 12;
 
   // The offered load in queries (or ops) per second
   optional int32 max_qps = 6;
@@ -48,18 +55,12 @@ message ExperimentParams {
   // Directory where the results file is saved
   optional string save_dir = 8;
 
-  // Kind of lock to use when running experiments
-  optional Lock lock = 11;
-
-  // Length of "critical section"
-  optional uint32 think_time_us = 12;
-
   // The following are filled in automatically and will be overwritten
 
   // The number of nodes in the cluster.
   optional uint32 cluster_size = 9;
 
-  // The number of clients on a given node.
+  // The number of clients in the system
   optional uint32 num_clients = 10;
 };
 
@@ -68,3 +69,10 @@ message ResultProto {
   optional NodeProto client = 2;
   optional rome.WorkloadDriverProto driver = 3;
 };
+
+
+message ResultsProto {
+  optional uint32 cluster_size = 4;
+  optional ExperimentParams experiment_params = 1;
+  repeated ResultProto results = 2;
+}

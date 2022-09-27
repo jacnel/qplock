@@ -1,6 +1,6 @@
 load("@rules_cc//cc:defs.bzl", "cc_proto_library")
 load("@com_google_protobuf//:protobuf.bzl", "py_proto_library")
-load("flags.bzl", "lock_type")
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 
 proto_library(
     name = "experiment_proto",
@@ -79,9 +79,14 @@ filegroup(
     srcs = glob(["experiments/**"]),
 )
 
-lock_type(
+string_flag(
     name = "lock_type",
     build_setting_default = "mcs",
+    values = [
+        "mcs",
+        "spin",
+        "qp",
+    ],
 )
 
 config_setting(
@@ -129,35 +134,32 @@ cc_binary(
     ],
 )
 
-# # py_binary(
-# #     name = "launch",
-# #     srcs = ["launch.py"],
-# #     data = [
-# #         ":configfiles",
-# #         ":experiments",
-# #         ":nodefiles",
-# #     ],
-# #     deps = [
-# #         ":experiment_py_proto",
-# #     ],
-# # )
+# We assume that data is saved to a directory within this subdirectory called `results`.
+filegroup(
+    name = "results",
+    srcs = glob(["results/**"]),
+)
 
-# # # We assume that data is saved to a directory within this subdirectory called `results`.
-# # filegroup(
-# #     name = "results",
-# #     srcs = glob(["results/**"]),
-# # )
+py_binary(
+    name = "launch",
+    srcs = ["launch.py"],
+    data = [
+        ":nodefiles",
+    ],
+    deps = [
+        ":experiment_py_proto",
+        ":plot",
+        "@rome//rome/util:debugpy_util",
+    ],
+)
 
-# # py_binary(
-# #     name = "plot",
-# #     srcs = ["plot.py"],
-# #     data = [
-# #         ":experiments",
-# #         ":results",
-# #         "@rome//protos:colosseum_py_proto",
-# #         "@rome//protos:metrics_py_proto",
-# #     ],
-# #     deps = [
-# #         ":experiment_py_proto",
-# #     ],
-# # )
+py_binary(
+    name = "plot",
+    srcs = ["plot.py"],
+
+    deps = [
+        ":experiment_py_proto",
+        "@rome//protos:colosseum_py_proto",
+        "@rome//protos:metrics_py_proto",
+    ],
+)

@@ -64,13 +64,13 @@ flags.DEFINE_bool('remote_scans', False, 'Clients use one-sided scans')
 flags.DEFINE_string('datastore', 'romekv',
                     'Underlying datastore to use for experiments')
 
-flags.DEFINE_string('ssh_user', 'jacob', '')
+flags.DEFINE_string('ssh_user', 'amanda', '')
 flags.DEFINE_string('ssh_keyfile', '~/.ssh/cloudlab', '')
 flags.DEFINE_string('bazel_flags', '-c opt',
                     'The run command to pass to Bazel')
 flags.DEFINE_string('bazel_bin', '~/go/bin/bazelisk',
                     'Location of bazel binary')
-flags.DEFINE_string('bazel_prefix', 'cd sss/qplock &&',
+flags.DEFINE_string('bazel_prefix', 'cd qplock_rome/qplock/ &&',
                     'Command to run before bazel')
 flags.DEFINE_bool('gdb', False, 'Run in gdb')
 
@@ -94,7 +94,7 @@ flags.DEFINE_integer(
 
 flags.DEFINE_integer(
     'port', 18018, 'Port to listen for incoming connections on')
-flags.DEFINE_string('log_dest', '/tmp/romekv/ycsb/logs',
+flags.DEFINE_string('log_dest', '/rome/ycsb/logs',
                     'Name of local log directory for ssh commands')
 flags.DEFINE_boolean(
     'dry_run', False,
@@ -149,6 +149,8 @@ def get_domain(node_type):
 
 def partition_nodefile(path, n_server_nodes):
     # Put a server on own machines
+    # print(path)
+    # print(os.getcwd())
     all_csv = []
     assert(os.path.exists(path))
     with open(path, 'r') as __file:
@@ -285,10 +287,11 @@ def build_local_save_dir(ycsb, public_hostname):
 
 # def build_experiment_params(ycsb, workers):
 def fill_experiment_params_common(
-        proto, experiment_name, lock, nservers, nclients, think):
+        proto, experiment_name, ycsb, lock, nservers, nclients, think):
     proto.name = experiment_name
     # proto.num_servers = nservers
-    # proto.num_clients = nclients
+    proto.num_clients = nclients
+    proto.cluster_size = nclients + nservers
     # proto.num_readonly = nreadonly
     proto.workload.runtime = FLAGS.runtime
     proto.workload.think_time_ns = think
@@ -395,7 +398,7 @@ def main(args):
         if FLAGS.datafile is None:
             os.remove(datafile)
     else:
-        columns = ['lock', 's',  'c', 't',  'done']
+        columns = ['ycsb', 'lock', 's',  'c', 't',  'done']
         experiments = {}
         if not FLAGS.dry_run and os.path.exists(FLAGS.expfile):
             experiments = pandas.read_csv(FLAGS.expfile, index_col='row')
@@ -448,7 +451,7 @@ def main(args):
                             params = build_server_experiment_params(
                                 server.nid)
                             params = fill_experiment_params_common(
-                                params, experiment_name, lock, s_count,
+                                params, experiment_name, ycsb, lock, s_count,
                                 c_count, think)
                             run_command = build_common_command(
                                 lock, params, cluster_proto)
@@ -467,7 +470,7 @@ def main(args):
                         params = build_client_experiment_params(
                             client_list)
                         params = fill_experiment_params_common(
-                            params, experiment_name, lock, s_count,
+                            params, experiment_name, ycsb, lock, s_count,
                             c_count, think)
                         run_command = build_common_command(
                             lock, params, cluster_proto)

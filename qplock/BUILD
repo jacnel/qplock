@@ -41,6 +41,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [":util",
             "@rome//rome/logging",
+            "@rome//rome/util:thread_util",
     ],
 )
 
@@ -51,6 +52,8 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":util",
+        ":rdma_mcs_lock",
+        ":mcs_lock",
         "@rome//rome/rdma:rdma_memory",
         "@rome//rome/rdma/channel:sync_accessor",
         "@rome//rome/rdma/connection_manager",

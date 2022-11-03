@@ -25,11 +25,19 @@ message ClusterProto {
 message AckProto {};
 
 message Workload {
+  optional string ycsb = 1;
+  
   // Length of "critical section"
   optional uint32 think_time_ns = 2;
 
   // The benchmark length
   optional int32 runtime = 3;
+
+  optional uint64 min_key = 4;
+  optional uint64 max_key = 5;
+
+  optional uint32 theta = 6;
+  
 };
 
 message ExperimentParams {

@@ -46,10 +46,16 @@ private:
   MemoryPool::Peer self_;
   MemoryPool &pool_;
 
+  // Add a pointer to the qplock object here and store the address upon init
+
+  // other nodes in system use this to access the desc?
   remote_ptr<remote_ptr<Descriptor>> lock_pointer_;
-  remote_ptr<Descriptor> desc_pointer_;
+  
+  // Used as landing spot for peers
   remote_ptr<remote_ptr<Descriptor>> prealloc_;
 
+  //Pointer to desc to allow it to be read/write via rdma
+  remote_ptr<Descriptor> desc_pointer_;
   volatile Descriptor *descriptor_;
 };
 

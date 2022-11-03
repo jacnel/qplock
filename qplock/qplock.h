@@ -8,6 +8,7 @@
 #include <thread>
 
 #include "rdma_mcs_lock.h"
+#include "mcs_lock.h"
 
 #include "util.h"
 
@@ -24,29 +25,37 @@ class QPLock {
 public:
   using conn_type = MemoryPool::conn_type;
 
-  struct alignas(128) Descriptor {
-    RdmaMcsLock::Descriptor *remote_desc;
-    uint8_t pad1[CACHELINE_SIZE - sizeof(uintptr_t)]; // bit confused about what type this pointer would be
-    McsLock::Descriptor *local_desc;
-    uint8_t pad2[CACHELINE_SIZE - sizeof(uintptr_t)]; // see above
+  struct alignas(128) AsyncLock {
+    // pointer to the remote tail
+    remote_ptr<RdmaMcsLock> remote_q;
+    // pointer to the local tail
+    McsLock *local_q;
+    // pointers share first cache line, victim var on next
+    uint8_t pad2[CACHELINE_SIZE - sizeof(uintptr_t) - sizeof(uintptr_t)];
+    // node id of the victim
+    uint16_t victim; 
+    uint8_t pad3[CACHELINE_SIZE - sizeof(uint16_t)];
   };
-  static_assert(alignof(Descriptor) == 128);
-  static_assert(sizeof(Descriptor) == 128);
+  static_assert(alignof(AsyncLock) == 128);
+  static_assert(sizeof(AsyncLock) == 128);
 
-  //Should the QP Lock take on the responsibility of setting up the rdma stuff or should it just be calling init of the RdmaMcsLock descriptor? if that is possible...
-  QPLock(MemoryPool::Peer self, std::unique_ptr<MemoryPool::cm_type> cm);
+  QPLock(MemoryPool::Peer self, MemoryPool& pool);
 
   absl::Status Init(MemoryPool::Peer host,
                     const std::vector<MemoryPool::Peer> &peers);
 
-  bool IsLocked();
   void Lock();
   void Unlock();
+  void Reacquire();
 
 private:
   bool is_host_;
+  MemoryPool::Peer self_;
+  MemoryPool &pool_;
   
-  volatile Descriptor *descriptor_;
+  //Pointer to desc to allow it to be read/write via rdma
+  remote_ptr<AsyncLock> lock_pointer_;
+  volatile AsyncLock *lock_;
 };
 
 } //namespace X

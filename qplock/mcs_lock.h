@@ -13,7 +13,7 @@ namespace X {
 
 class McsLock {
   struct Descriptor {
-    int8_t budget{-1};
+    int8_t budget{-1}; //budhet == -1 indicates its locked, unliked when it can proceed to critical section
     uint8_t pad1[CACHELINE_SIZE - sizeof(budget)];
     Descriptor* next{nullptr};
     uint8_t pad2[CACHELINE_SIZE - sizeof(next)];

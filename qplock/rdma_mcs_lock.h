@@ -10,6 +10,7 @@
 #include "rome/rdma/memory_pool/memory_pool.h"
 #include "rome/rdma/rdma_memory.h"
 #include "util.h"
+#include "qplock/qplock/qplock.h"
 
 namespace X {
 
@@ -32,6 +33,7 @@ public:
   static_assert(alignof(Descriptor) == 128);
   static_assert(sizeof(Descriptor) == 128);
 
+  // Change constructor to take in memeory of the glock?
   RdmaMcsLock(MemoryPool::Peer self, MemoryPool& pool);
 
   absl::Status Init(MemoryPool::Peer host,
@@ -46,7 +48,8 @@ private:
   MemoryPool::Peer self_;
   MemoryPool &pool_;
 
-  // Add a pointer to the qplock object here and store the address upon init
+  // Pointer to the qplock object, store address in constructor
+  remote_ptr<remote_ptr<QPLock>> glock_; 
 
   // other nodes in system use this to access the desc?
   remote_ptr<remote_ptr<Descriptor>> lock_pointer_;

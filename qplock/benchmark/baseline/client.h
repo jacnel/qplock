@@ -8,8 +8,6 @@
 
 #include "qplock/rdma_mcs_lock.h"
 #include "qplock/rdma_spin_lock.h"
-#include "qplock/qplock.h"
-#include "qplock/lock_handle_factory"
 #include "rome/colosseum/qps_controller.h"
 #include "rome/colosseum/streams/streams.h"
 #include "rome/colosseum/workload_driver.h"
@@ -19,7 +17,6 @@
 #include "setup.h"
 
 using ::rome::rdma::MemoryPool;
-using ::rome::rdma::remote_ptr;
 
 class Client : public ClientAdaptor<rome::NoOp> {
 public:
@@ -28,22 +25,6 @@ public:
          const ExperimentParams &experiment_params, std::barrier<> *barrier) {
     return std::unique_ptr<Client>(
         new Client(self, server, peers, experiment_params, barrier));
-  }
-
-  absl::Status Connect(std::unique_ptr<Client> client) {
-    // Wait until the base address is shared by the host
-    auto conn_or = pool_.connection_manager()->GetConnection(host_.id);
-    ROME_CHECK_OK(ROME_RETURN(conn_or.status()), conn_or);
-    auto got = conn_or.value()->channel()->TryDeliver<RemoteObjectProto>();
-    while (got.status().code() == absl::StatusCode::kUnavailable) {
-      got = conn_or.value()->channel()->TryDeliver<RemoteObjectProto>();
-    }
-    ROME_CHECK_OK(ROME_RETURN(got.status()), got);
-    // set lock pointer to the base address of the lock on the host
-    lock_pointer_ = decltype(lock_pointer_)(host.id, got->raddr());
-  
-    ROME_DEBUG("Got Global QPLock pointer {:x}", static_cast<uint64_t>(lock_pointer_));
-    return absl::OkStatus();
   }
 
   static absl::StatusOr<ResultProto>
@@ -104,10 +85,8 @@ public:
     return status;
   }
 
-  // TODO: this should become a method where a client is expressing interest in  
   absl::Status Apply(const rome::NoOp &op) override {
     ROME_DEBUG("Locking...");
-    // this 
     lock_.Lock();
     auto start = util::SystemClock::now();
     if (experiment_params_.workload().has_think_time_ns()) {
@@ -159,6 +138,4 @@ private:
 
   MemoryPool pool_;
   LockType lock_;
-
-  remote_ptr<QPLock> lock_pointer_; //pointer to first QPLock in the servers mem pool
 };

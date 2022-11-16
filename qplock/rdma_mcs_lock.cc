@@ -23,7 +23,7 @@ using ::rome::rdma::RemoteObjectProto;
 
 RdmaMcsLock::RdmaMcsLock(MemoryPool::Peer self, MemoryPool &pool)
     : self_(self), pool_(pool) {}
-// store pointer to qplock glock
+
 absl::Status RdmaMcsLock::Init(MemoryPool::Peer host,
                                const std::vector<MemoryPool::Peer> &peers) {
   is_host_ = self_.id == host.id;
@@ -62,7 +62,7 @@ absl::Status RdmaMcsLock::Init(MemoryPool::Peer host,
     // set lock pointer to the base address of the lock on the host
     lock_pointer_ = decltype(lock_pointer_)(host.id, got->raddr());
 
-    //landing point to read in the value of lock_pointer?
+    //Used as preallocated memory for RDMA writes
     prealloc_ = pool_.Allocate<remote_ptr<Descriptor>>();
   }
   ROME_DEBUG("Lock pointer {:x}", static_cast<uint64_t>(lock_pointer_));
@@ -71,13 +71,14 @@ absl::Status RdmaMcsLock::Init(MemoryPool::Peer host,
 
 bool RdmaMcsLock::IsLocked() {
   if (is_host_) {
+    //since we are the host, get the local addr and just interpret the value
     return std::to_address(*(std::to_address(lock_pointer_))) != 0;
   } else {
     // read in value of host's lock ptr
     auto remote = pool_.Read<remote_ptr<Descriptor>>(lock_pointer_);
     // store result of if its locked
     auto locked = static_cast<uint64_t>(*(std::to_address(remote))) != 0;
-    // deallocate the ptr used as a landing spot for reading in 
+    // deallocate the ptr used as a landing spot for reading in (which is created in Read)
     auto ptr =
         remote_ptr<remote_ptr<Descriptor>>{self_.id, std::to_address(remote)};
     pool_.Deallocate(ptr);
@@ -86,18 +87,20 @@ bool RdmaMcsLock::IsLocked() {
 }
 
 void RdmaMcsLock::Lock() {
-  // ignoring but p sure its outdated --> says not implemented if we aren't host but jacob was testing peers?
+  // TODO: not currently set up to swap the correct address?
   ROME_ASSERT_DEBUG(!is_host_, "Unimplemented!");  
+  // Set local descriptor to initial values
   descriptor_->budget = -1;
   descriptor_->next = remote_nullptr;
+  // swap local descriptor in at the address of the hosts lock pointer
   auto prev =
       pool_.AtomicSwap(lock_pointer_, static_cast<uint64_t>(desc_pointer_));
-  if (prev != remote_nullptr) { //someone has the lock
+  if (prev != remote_nullptr) { //someone else has the lock
     auto temp_ptr = remote_ptr<uint8_t>(prev);
-    temp_ptr += 64;
+    temp_ptr += 64; //temp_ptr = next field of the current tail's descriptor
     // make prev point to the current tail descriptor's next pointer
     prev = remote_ptr<Descriptor>(temp_ptr);
-    // set the predecessor's next to the new descriptor (your desc_pointer_)
+    // set the address of the current tail's next field = to the addr of our local descriptor
     pool_.Write<remote_ptr<Descriptor>>(
         static_cast<remote_ptr<remote_ptr<Descriptor>>>(prev), desc_pointer_,
         prealloc_);
@@ -112,11 +115,14 @@ void RdmaMcsLock::Lock() {
       ROME_DEBUG("Budget exhausted (id={})",
                  static_cast<uint64_t>(desc_pointer_.id()));
       // TODO: INJECT THE CALL TO REACQUIRE
+      
       descriptor_->budget = kInitBudget;
     }
-  } else {
+  } else { //no one had the lock, we were swapped in
+    // set lock holders descriptor budget to initBudget since we are the first lockholder
     descriptor_->budget = kInitBudget;
   }
+  // budget was set to greater than 0, CS can be entered
   ROME_DEBUG("[Lock] Acquired: prev={:x}, budget={:x} (id={})",
              static_cast<uint64_t>(prev), descriptor_->budget,
              static_cast<uint64_t>(desc_pointer_.id()));
@@ -129,11 +135,12 @@ void RdmaMcsLock::Unlock() {
   ROME_ASSERT_DEBUG(!is_host_, "Unimplemented!");
   // if lock_pointer_ == my desc (we are the tail), set it to 0 to unlock
   // otherwise, someone else is contending for lock and we want to give it to them
+  // try to swap in a 0 to unlock the descriptor at the addr of lock_pointer, which we expect to currently be equal to our descriptor
   auto prev = pool_.CompareAndSwap(lock_pointer_,
                                    static_cast<uint64_t>(desc_pointer_), 0);
-  if (prev != desc_pointer_) { 
+  if (prev != desc_pointer_) {  // if the lock at lock_pointer_ was not equal to our descriptor
     // attempt to hand the lock to prev
-    // spin 
+    // spin while 
     while (descriptor_->next == remote_nullptr)
       ;
     std::atomic_thread_fence(std::memory_order_acquire);
@@ -143,7 +150,7 @@ void RdmaMcsLock::Unlock() {
     pool_.Write<uint64_t>(static_cast<remote_ptr<uint64_t>>(next),
                           descriptor_->budget - 1,
                           static_cast<remote_ptr<uint64_t>>(prealloc_));
-  } else {
+  } else { //successful CAS, we unlocked our descriptor
     ROME_DEBUG("[Unlock] Unlocked (id={})",
                static_cast<uint64_t>(desc_pointer_.id()));
   }

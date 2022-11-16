@@ -27,23 +27,29 @@ QPLock::QPLock(MemoryPool::Peer self, MemoryPool &pool)
 // TODO: Modify
 absl::Status QPLock::Init(MemoryPool::Peer host,
                                const std::vector<MemoryPool::Peer> &peers) {
-  is_host_ = self_.id == host.id;
   auto capacity = 1 << 20;
-  auto status = pool_.Init(capacity, peers);
+  auto status = pool_.Init(capacity, peers); 
   ROME_ASSERT_OK(status);
 
-  // Reserve remote memory for the async lock.
-  lock_pointer_ = pool_.Allocate<AsyncLock>();
-  lock_ = reinterpret_cast<AsyncLock *>(lock_pointer_.address());
-  ROME_DEBUG("AsyncLock @ {:x}", static_cast<uint64_t>(lock_pointer_));
+  // Reserve remote memory for the local async lock.
+  async_pointer_ = pool_.Allocate<AsyncLock>();
+  async_lock_ = reinterpret_cast<AsyncLock *>(async_pointer_.address());
+  ROME_DEBUG("AsyncLock @ {:x}", static_cast<uint64_t>(async_pointer_));
 
-  //Allocated a pointer here
-  //Pass this memory to the mcs queue
+  // Allocate the local MCS queue
+  
+  // Remote q begins as a nullptr to a rdma_mcs, first remote operation will allocate a 
+  // remote desciptor and swap its descriptor in at this location
+  // r_tail->desc_pointer_ = remote_nullptr;
+
+
+  // Send all peers the address of the async lock
+  // Address of the remote tail is address of the async lock + 32
 
   if (is_host_) {
     // Send all peers the base address of the AsyncLock residing on the host
     RemoteObjectProto proto;
-    lock_pointer_ = pool_.Allocate<remote_ptr<Descriptor>>();
+    lock_pointer_ = pool_.Allocate<remote_ptr<AsyncLock>>();
     proto.set_raddr(lock_pointer_.address());
 
     *(std::to_address(lock_pointer_)) = remote_ptr<Descriptor>(0);
@@ -74,16 +80,26 @@ absl::Status QPLock::Init(MemoryPool::Peer host,
 void QPLock::Lock(){
   if (is_host_) {
     //attempt to acquire the local msc lock
-    descriptor_->local_q.Lock(); 
+    lock_->l_tail.Lock(); 
   } else {
-    descriptor_->remote_q.Lock();
+    //attempt to acquire remote mcs lock
+    lock_->r_tail.Lock();
   }
-  //attempt to acquire remote mcs lock
+  // At this point, the leader has the lock, so whoever isLocked can execute their critical section
 
 }
 
-void QPLock::Unlock(){}
+void QPLock::Unlock(){
+  if (is_host_) { 
+    lock_->l_tail.Unlock();
+  } else { 
+    lock_->r_tail.Unlock();
+  }
+}
 
-void QPLock::Reacquire(){}
+void QPLock::Reacquire(){
+  victim = getCid();
+  
+}
 
-} // namespace X
+} // namespace Xj

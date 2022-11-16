@@ -94,7 +94,7 @@ flags.DEFINE_integer(
 
 flags.DEFINE_integer(
     'port', 18018, 'Port to listen for incoming connections on')
-flags.DEFINE_string('log_dest', '/rome/ycsb/logs',
+flags.DEFINE_string('log_dest', '/tmp/ycsb/logs',
                     'Name of local log directory for ssh commands')
 flags.DEFINE_boolean(
     'dry_run', False,
@@ -398,7 +398,7 @@ def main(args):
         if FLAGS.datafile is None:
             os.remove(datafile)
     else:
-        columns = ['ycsb', 'lock', 's',  'c', 't',  'done']
+        columns = ['lock', 's',  'c', 't',  'done']
         experiments = {}
         if not FLAGS.dry_run and os.path.exists(FLAGS.expfile):
             experiments = pandas.read_csv(FLAGS.expfile, index_col='row')

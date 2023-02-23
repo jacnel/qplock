@@ -1,0 +1,115 @@
+syntax = "proto2";
+
+package X;
+
+
+message KeyRangeProto {
+  optional uint64 low = 1;
+  optional uint64 high = 2;
+};
+
+message InitRequestProto {
+  optional uint64 quiescence = 1;
+  optional uint64 doorbell = 2;
+};
+
+message InitResponseProto {
+  optional uint64 root = 1;
+  optional uint64 doorbell = 2;
+};
+
+message DisconnectRequestProto {
+  optional uint64 rptr = 1;
+};
+
+message DisconnectResponseProto {};
+
+message GetRequestProto {
+  optional uint64 key = 1;
+};
+
+message GetResponseProto {
+  optional uint64 value = 1;
+};
+
+message InsertRequestProto {
+  optional uint64 key = 1;
+  optional uint64 value = 2;
+  optional bool update = 3;
+};
+
+
+message InsertResponseProto {
+  optional bool ok = 1;
+};
+
+message DeleteRequestProto {
+  optional uint64 key = 1;
+};
+
+message DeleteResponseProto {
+  optional bool ok = 1;
+};
+
+message ScanRequestProto {
+  optional KeyRangeProto range = 1;
+  optional int32 reserved = 5;
+  optional uint64 dest = 2;
+  optional uint64 rx = 3;
+  optional uint64 doorbell = 4;
+};
+
+message ScanPayloadProto {
+  repeated uint64 keys = 1;
+  repeated uint64 values = 2;
+};
+
+message ScanResponseProto {
+  optional int32 count = 1;
+};
+
+message RequestProto {
+  oneof req {
+    InitRequestProto init = 1;
+    GetRequestProto get = 2;
+    InsertRequestProto ins = 3;
+    DeleteRequestProto del = 4;
+    ScanRequestProto scan = 5;
+    DisconnectRequestProto disc = 6;
+  };
+};
+
+message ResponseProto {
+  oneof resp {
+    InitResponseProto init = 1;
+    GetResponseProto get = 2;
+    InsertResponseProto ins = 3;
+    DeleteResponseProto del = 4;
+    ScanResponseProto scan = 5;
+    DisconnectResponseProto disc = 6;
+  };
+};
+
+message NodeProto {
+  optional uint32 nid = 1;
+  optional string name = 2;
+  optional string public_name = 3;
+  optional uint32 rome_port = 4;
+};
+
+
+message ServerProto {
+  optional NodeProto node = 1;
+  optional KeyRangeProto range = 2;
+  optional uint32 num_fg_threads = 3;
+  optional uint64 capacity = 4;
+};
+
+message ClientProto {
+  optional NodeProto node = 1;
+};
+
+message ClusterProto {
+  repeated ServerProto servers = 1;
+  repeated ClientProto clients = 2;
+};

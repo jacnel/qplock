@@ -10,7 +10,6 @@
 #include "rome/rdma/memory_pool/memory_pool.h"
 #include "rome/rdma/rdma_memory.h"
 #include "util.h"
-#include "qplock/qplock/qplock.h"
 
 namespace X {
 
@@ -46,15 +45,15 @@ public:
 private:
   bool is_host_;
   MemoryPool::Peer self_;
-  MemoryPool &pool_;
+  MemoryPool &pool_; //reference to pool object, so all descriptors in same pool
 
-  // Pointer to the qplock object, store address in constructor
-  remote_ptr<remote_ptr<QPLock>> glock_; 
+  // Pointer to the A_Lock object, store address in constructor
+  // remote_ptr<A_Lock> glock_; 
 
-  // other nodes in system use this to access the desc?
-  remote_ptr<remote_ptr<Descriptor>> lock_pointer_;
+  // this is pointing to the next field of the lock on the host
+  remote_ptr<remote_ptr<Descriptor>> lock_pointer_; //this is supposed to be the tail on the host
   
-  // Used as landing spot for peers
+  // Used for rdma writes to the next feld
   remote_ptr<remote_ptr<Descriptor>> prealloc_;
 
   //Pointer to desc to allow it to be read/write via rdma

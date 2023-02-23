@@ -4,7 +4,7 @@ from absl import app
 import os
 import google.protobuf.text_format as text_format
 import google.protobuf.descriptor as descriptor
-import qplock.benchmark.experiment_pb2 as experiment
+import qplock.benchmark.baseline.experiment_pb2 as experiment
 from alive_progress import alive_bar
 import pandas
 import matplotlib.pyplot as plt
@@ -189,7 +189,7 @@ def plot_throughput(
         style=hue,
         markers=True,
         markersize=markersize,
-        ci='sd',
+        errorbar='sd',
         palette=palette
     )
     totals = seaborn.lineplot(
@@ -340,7 +340,8 @@ configs = {
 
 def plot(datafile, ycsb_list):
     data = pandas.read_csv(datafile)
-    data = data[data['experiment_params.workload.think_time_ns'] == 1000]
+    # TODO: THIS LINE CHANGES WHICH LOCK HOLD TIME WE ARE PLOTTING
+    data = data[data['experiment_params.workload.think_time_ns'] == 0] #modify what this takes to plot differernt set of
     # data = data[data['experiment_params.num_clients'] % 4 == 0]
                 # [data['experiment_params.num_clients'] >= 30]
 

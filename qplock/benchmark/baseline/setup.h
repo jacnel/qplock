@@ -5,9 +5,10 @@
 #include <memory>
 
 #include "absl/status/status.h"
-#include "qplock/benchmark/experiment.pb.h"
+#include "qplock/benchmark/baseline/experiment.pb.h"
 #include "qplock/rdma_mcs_lock.h"
 #include "qplock/rdma_spin_lock.h"
+#include "qplock/a_lock_handle.h"
 #include "rome/colosseum/client_adaptor.h"
 #include "rome/colosseum/streams/streams.h"
 #include "rome/logging/logging.h"
@@ -39,7 +40,7 @@ using conn_type = ::rome::rdma::MemoryPool::conn_type;
 #ifdef QPLOCK_LOCK_TYPE
 using LockType = QPLOCK_LOCK_TYPE;
 #else
-#error "QPLOCK_LOCK_TYPE is "
+#error "QPLOCK_LOCK_TYPE is undefined"
 #endif
 
 static constexpr uint16_t kServerPort = 18000;

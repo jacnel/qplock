@@ -5,6 +5,15 @@ cc_library(
 )
 
 cc_library(
+    name = "common",
+    hdrs = ["common.h"],
+    deps = [
+        ":util",
+        "@rome//rome/rdma/memory_pool",
+    ],
+)
+
+cc_library(
     name = "rdma_mcs_lock",
     srcs = ["rdma_mcs_lock.cc"],
     hdrs = ["rdma_mcs_lock.h"],
@@ -46,14 +55,47 @@ cc_library(
 )
 
 cc_library(
-    name = "qplock",
-    srcs = ["qplock.cc"],
-    hdrs = ["qplock.h"],
+    name = "a_lock",
+    srcs = ["a_lock_handle.cc"],
+    hdrs = ["a_lock_handle.h"],
     visibility = ["//visibility:public"],
     deps = [
         ":util",
-        ":rdma_mcs_lock",
-        ":mcs_lock",
+        ":common",
+        ":lock_handle",
+        ":remote_lock_handle",
+        "@rome//rome/rdma:rdma_memory",
+        "@rome//rome/rdma/channel:sync_accessor",
+        "@rome//rome/rdma/connection_manager",
+        "@rome//rome/rdma/memory_pool",
+        "@rome//rome/rdma/memory_pool:remote_ptr",
+    ],
+)
+
+cc_library(
+    name = "lock_handle",
+    srcs = ["lock_handle.cc"],
+    hdrs = ["lock_handle.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":util",
+        ":common",
+        "@rome//rome/rdma:rdma_memory",
+        "@rome//rome/rdma/channel:sync_accessor",
+        "@rome//rome/rdma/connection_manager",
+        "@rome//rome/rdma/memory_pool",
+        "@rome//rome/rdma/memory_pool:remote_ptr",
+    ],
+)
+
+cc_library(
+    name = "remote_lock_handle",
+    srcs = ["remote_lock_handle.cc"],
+    hdrs = ["remote_lock_handle.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":util",
+        ":common",
         "@rome//rome/rdma:rdma_memory",
         "@rome//rome/rdma/channel:sync_accessor",
         "@rome//rome/rdma/connection_manager",
@@ -85,6 +127,15 @@ cc_test(
     srcs = ["mcs_lock_test.cc"],
     deps = [
         ":mcs_lock",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "a_lock_test",
+    srcs = ["a_lock_test.cc"],
+    deps = [
+        ":a_lock",
         "@gtest//:gtest_main",
     ],
 )

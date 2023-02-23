@@ -1,4 +1,4 @@
-#include "rdma_mcs_lock.h"
+#include "a_lock_handle.h"
 
 #include <barrier>
 #include <chrono>
@@ -14,19 +14,19 @@
 namespace X {
 namespace {
 
-using Conn = RdmaMcsLock::conn_type;
+using Conn = ALockHandle::conn_type;
 
 constexpr char kIpAddress[] = "10.0.0.1";
 constexpr char kIpAddress2[] = "10.0.0.2";
 constexpr uint16_t kHostId = 0;
 constexpr uint16_t kHostPort = 18000;
 
-class RdmaMcsLockTest : public ::testing::Test {
+class ALockHandleTest : public ::testing::Test {
 protected:
   using cm_type = MemoryPool::cm_type;
   using peer_type = MemoryPool::Peer;
 
-  RdmaMcsLockTest() {
+  ALockHandleTest() {
     ROME_INIT_LOG();
     InitPeer(host_);
   }
@@ -35,7 +35,7 @@ protected:
     pool_ = std::make_unique<MemoryPool>(
         peer, std::make_unique<ConnectionManager<Conn::channel_type>>(peer.id));
     locks_.emplace(peer.id,
-                   std::make_unique<RdmaMcsLock>(peer, *(pool_.get())));
+                   std::make_unique<ALockHandle>(peer, *(pool_.get())));
     peers_.push_back(peer);
   }
 
@@ -56,10 +56,10 @@ protected:
 
   std::unique_ptr<MemoryPool> pool_;
   std::vector<peer_type> peers_;
-  std::unordered_map<uint16_t, std::unique_ptr<RdmaMcsLock>> locks_;
+  std::unordered_map<uint16_t, std::unique_ptr<ALockHandle>> locks_;
 };
 
-TEST_F(RdmaMcsLockTest, HostIsLocked) {
+TEST_F(ALockHandleTest, HostIsUnlocked) {
   // Test plan: Construct a lock and check that it is unlocked.
   InitTest();
   ASSERT_EQ(peers_.size(), 1);
@@ -68,7 +68,18 @@ TEST_F(RdmaMcsLockTest, HostIsLocked) {
   EXPECT_FALSE(iter->second->IsLocked());
 }
 
-TEST_F(RdmaMcsLockTest, PeerIsLocked) {
+TEST_F(ALockHandleTest, HostIsLocked) {
+  // Test plan: Construct a lock and check that it is locked after locking.
+  InitTest();
+  ASSERT_EQ(peers_.size(), 1);
+  auto iter = locks_.find(host_.id);
+  ASSERT_NE(iter, locks_.end());
+  EXPECT_FALSE(iter->second->IsLocked());
+  iter->second->Lock();
+  EXPECT_TRUE(iter->second->IsLocked());
+}
+
+TEST_F(ALockHandleTest, PeerIsLocked) {
   // Test plan: Construct a lock and check that it is unlocked.
   std::vector<peer_type> test_peers;
   for (int i = 1; i < 10; i++) {
@@ -87,7 +98,7 @@ TEST_F(RdmaMcsLockTest, PeerIsLocked) {
   });
 }
 
-TEST_F(RdmaMcsLockTest, LocksOnce) {
+TEST_F(ALockHandleTest, LocksOnce) {
   // Test plan: Construct a lock, then lock it with a single remote process.
   peer_type p{1, kIpAddress, kHostPort + 1};
   InitPeer(p);
@@ -100,7 +111,7 @@ TEST_F(RdmaMcsLockTest, LocksOnce) {
   EXPECT_TRUE(iter->second->IsLocked());
 }
 
-TEST_F(RdmaMcsLockTest, UnlocksOnce) {
+TEST_F(ALockHandleTest, UnlocksOnce) {
   // Test plan: Construct a lock and check that it is unlocked after locking and unlocking.
   peer_type p{1, kIpAddress, kHostPort + 1};
   InitPeer(p);
@@ -114,7 +125,7 @@ TEST_F(RdmaMcsLockTest, UnlocksOnce) {
   EXPECT_FALSE(iter->second->IsLocked());
 }
 
-TEST_F(RdmaMcsLockTest, MutlipleLocksAndUnlocks) {
+TEST_F(ALockHandleTest, MutlipleLocksAndUnlocks) {
   peer_type p{1, kIpAddress, kHostPort + 1};
   InitPeer(p);
   InitTest();
@@ -129,7 +140,7 @@ TEST_F(RdmaMcsLockTest, MutlipleLocksAndUnlocks) {
   }
 }
 
-TEST_F(RdmaMcsLockTest, MultipleConcurrentLockers) {
+TEST_F(ALockHandleTest, MultipleConcurrentLockers) {
   constexpr int kNumClients = 5;
 
   for (int i = 1; i <= kNumClients; ++i) {

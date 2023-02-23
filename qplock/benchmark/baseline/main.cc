@@ -18,7 +18,7 @@
 #include "absl/status/status.h"
 #include "client.h"
 #include "google/protobuf/text_format.h"
-#include "qplock/benchmark/experiment.pb.h"
+#include "qplock/benchmark/baseline/experiment.pb.h"
 #include "rome/colosseum/client_adaptor.h"
 #include "rome/colosseum/qps_controller.h"
 #include "rome/colosseum/streams/streams.h"
@@ -122,7 +122,7 @@ int main(int argc, char *argv[]) {
         auto client = Client::Create(c, server, others, experiment_params,
                                      &client_barrier);
         // call Client::Connect() --> should store remote_ptr to first node in the kv store and first qp lock
-        Client::Connect(std::move(client));
+        // Client::Connect(std::move(client));
         return Client::Run(std::move(client), experiment_params, &done);
       }));
     }

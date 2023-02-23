@@ -1,0 +1,82 @@
+experiment_params {
+  name: "lalock_s1.1_c1.1_t500"
+  mode: CLIENT
+  num_servers: 1
+  client_ids: 1
+  sampling_rate_ms: 50
+  save_dir: "exp1/alock"
+  cluster_size: 1
+  num_clients: 1
+  workload {
+    think_time_ns: 500
+    runtime: 3
+  }
+}
+results {
+  experiment_params {
+    name: "lalock_s1.1_c1.1_t500"
+    mode: CLIENT
+    num_servers: 1
+    client_ids: 1
+    sampling_rate_ms: 50
+    save_dir: "exp1/alock"
+    cluster_size: 1
+    num_clients: 1
+    workload {
+      think_time_ns: 500
+      runtime: 3
+    }
+  }
+  client {
+    nid: 1
+    private_hostname: "node1"
+    port: 18019
+  }
+  driver {
+    ops {
+      name: "total_ops"
+      counter {
+        count: 1926
+      }
+    }
+    runtime {
+      name: "driver_stopwatch"
+      stopwatch {
+        runtime_ns: 4099339682
+      }
+    }
+    qps {
+      name: "sampled_qps"
+      summary {
+        units: "ops/s"
+        mean: 1805.1929350055966
+        stddev: 5164.81426785943
+        min: 95.2673711665996
+        p50: 252.22960794153997
+        p90: 335.77979292556108
+        p95: 350.48815365884616
+        p99: 350.48815365884616
+        p999: 350.48815365884616
+        max: 18933.233555714069
+        count: 12
+      }
+    }
+    latency {
+      name: "sampled_lat"
+      summary {
+        units: "ns"
+        mean: 889142.55209580844
+        stddev: 24114796.602616165
+        min: 49683
+        p50: 50948
+        p90: 54196
+        p95: 55644
+        p99: 130109
+        p999: 347883
+        max: 697301387
+        count: 835
+      }
+    }
+  }
+}
+cluster_size: 1

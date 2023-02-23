@@ -1,0 +1,82 @@
+experiment_params {
+  name: "lmcs_s1.1_c1.1_t500"
+  mode: CLIENT
+  num_servers: 1
+  client_ids: 1
+  sampling_rate_ms: 50
+  save_dir: "exp1/mcs"
+  cluster_size: 1
+  num_clients: 1
+  workload {
+    think_time_ns: 500
+    runtime: 3
+  }
+}
+results {
+  experiment_params {
+    name: "lmcs_s1.1_c1.1_t500"
+    mode: CLIENT
+    num_servers: 1
+    client_ids: 1
+    sampling_rate_ms: 50
+    save_dir: "exp1/mcs"
+    cluster_size: 1
+    num_clients: 1
+    workload {
+      think_time_ns: 500
+      runtime: 3
+    }
+  }
+  client {
+    nid: 1
+    private_hostname: "node1"
+    port: 18019
+  }
+  driver {
+    ops {
+      name: "total_ops"
+      counter {
+        count: 330037
+      }
+    }
+    runtime {
+      name: "driver_stopwatch"
+      stopwatch {
+        runtime_ns: 3905878200
+      }
+    }
+    qps {
+      name: "sampled_qps"
+      summary {
+        units: "ops/s"
+        mean: 84496.816260672262
+        stddev: 445.24162971301132
+        min: 81586.5810343426
+        p50: 84615.6149973445
+        p90: 84702.029394760189
+        p95: 84713.380352983528
+        p99: 84757.0236257851
+        p999: 84757.0236257851
+        max: 84779.247482933541
+        count: 76
+      }
+    }
+    latency {
+      name: "sampled_lat"
+      summary {
+        units: "ns"
+        mean: 11568.505972186969
+        stddev: 385.91778804256069
+        min: 10930
+        p50: 11464.959310543638
+        p90: 12234.240778116173
+        p95: 12586.485025704395
+        p99: 12770.074917603781
+        p999: 16028.450099633652
+        max: 46134
+        count: 257862
+      }
+    }
+  }
+}
+cluster_size: 1

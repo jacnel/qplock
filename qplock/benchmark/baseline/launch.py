@@ -10,11 +10,11 @@ from multiprocessing import Process
 from os import abort
 from time import sleep
 
-import qplock.benchmark.experiment_pb2 as experiment_pb2
+import qplock.benchmark.baseline.experiment_pb2 as experiment_pb2
 import pandas
 from absl import app, flags
 from alive_progress import alive_bar
-import qplock.benchmark.plot as plot
+import qplock.benchmark.baseline.plot as plot
 from rome.rome.util.debugpy_util import debugpy_hook
 
 # `launch.py` is a helper script to run experiments remotely. It takes the same input paramters as the underlying script to execute along with additional parameters
@@ -28,7 +28,7 @@ flags.DEFINE_bool(
     'Whether or not to print commands to retrieve data from client nodes')
 flags.DEFINE_string(
     'save_root',
-    'qplock/bazel-bin/qplock/benchmark/main.runfiles/qplock',
+    'qplock_rome/qplock/',
     'Directory results are saved under when running')
 flags.DEFINE_string('nodefile', None, 'Path to nodefile',
                     short_name='n', required=True)
@@ -43,34 +43,22 @@ flags.DEFINE_string(
 )
 
 # Workload definition
-flags.DEFINE_multi_string('lock_type', 'mcs', 'Locks to test in experiment')
+flags.DEFINE_multi_string('lock_type', 'spin', 'Locks to test in experiment')
 flags.DEFINE_multi_integer('think_ns', 500, 'Think times in nanoseconds')
 
-flags.DEFINE_multi_string(
-    'ycsb', 'A', 'YCSB workload (oneof {A, B, C, D, E, R}')
 flags.DEFINE_integer('min_key', 0, 'Minimum key')
 flags.DEFINE_integer('max_key', int(1e6), 'Maximum key')
 flags.DEFINE_float('theta', 0.99, 'Theta in Zipfian distribution')
 flags.DEFINE_bool('stabilize', False, 'Perform deletions to stabilize size')
-flags.DEFINE_integer('min_rq_size', 0, 'Min key range length for scans')
-flags.DEFINE_integer('max_rq_size', 100, 'Max key range length for scans')
 flags.DEFINE_integer('runtime', 10, 'Number of seconds to run experiment')
-flags.DEFINE_bool('read_only_one_sided', True,
-                  'Readonly clients use one-sided RDMA operations')
 
-flags.DEFINE_bool('remote_gets', False, 'Clients use one-sided gets')
-flags.DEFINE_bool('remote_scans', False, 'Clients use one-sided scans')
-
-flags.DEFINE_string('datastore', 'romekv',
-                    'Underlying datastore to use for experiments')
-
-flags.DEFINE_string('ssh_user', 'amanda', '')
-flags.DEFINE_string('ssh_keyfile', '~/.ssh/cloudlab', '')
+flags.DEFINE_string('ssh_user', 'adb321', '')
+flags.DEFINE_string('ssh_keyfile', '~/.ssh/id_ed25519', '')
 flags.DEFINE_string('bazel_flags', '-c opt',
                     'The run command to pass to Bazel')
 flags.DEFINE_string('bazel_bin', '~/go/bin/bazelisk',
                     'Location of bazel binary')
-flags.DEFINE_string('bazel_prefix', 'cd qplock_rome/qplock/ &&',
+flags.DEFINE_string('bazel_prefix', 'cd qplock_rome/qplock/ && ',
                     'Command to run before bazel')
 flags.DEFINE_bool('gdb', False, 'Run in gdb')
 
@@ -94,13 +82,14 @@ flags.DEFINE_integer(
 
 flags.DEFINE_integer(
     'port', 18018, 'Port to listen for incoming connections on')
-flags.DEFINE_string('log_dest', '/tmp/ycsb/logs',
+flags.DEFINE_string('log_dest', 'tmp/qplock/logs',
                     'Name of local log directory for ssh commands')
 flags.DEFINE_boolean(
     'dry_run', False,
     'Prints out the commands to run without actually executing them')
 flags.DEFINE_boolean(
     'debug', False, 'Whether to launch a debugpy server to debug this program')
+flags.DEFINE_string('log_level', 'info', 'Rome logging level to launch client & servers with')
 
 
 # Parse the experiment file and make it globally accessible
@@ -109,27 +98,8 @@ config = configparser.ConfigParser(
 launch = None
 workload = None
 
-
-def get_ycsb(ycsb):
-    ycsb = ycsb.upper()
-    if ycsb == 'A':
-        return experiment_pb2.Ycsb.A
-    elif ycsb == 'B':
-        return experiment_pb2.Ycsb.B
-    elif ycsb == 'C':
-        return experiment_pb2.Ycsb.C
-    elif ycsb == 'D':
-        return experiment_pb2.Ycsb.D
-    elif ycsb == 'E':
-        return experiment_pb2.Ycsb.E
-    elif ycsb == 'R':
-        return experiment_pb2.Ycsb.R
-    else:
-        assert False, f'Invalid value for flag: --ycsb={ycsb}'
-
-
 __lehigh__ = ['luigi']
-__utah__ = ['xl170', 'c6525-100g', 'c6525-25g']
+__utah__ = ['xl170', 'c6525-100g', 'c6525-25g', 'd6515']
 __clemson__ = ['r6525']
 __emulab__ = ['r320']
 
@@ -230,7 +200,7 @@ def build_hostname(name, domain):
 
 def build_ssh_command(name, domain):
     return ' '.join(
-        ['ssh -v -i', FLAGS.ssh_keyfile, FLAGS.ssh_user + '@' +
+        ['ssh -i', FLAGS.ssh_keyfile, FLAGS.ssh_user + '@' +
          build_hostname(name, domain)])
 
 
@@ -241,15 +211,17 @@ def build_common_command(lock, params, cluster):
         cmd = ' '.join([cmd, 'run'])
         cmd = ' '.join([cmd, FLAGS.bazel_flags])
         cmd = ' '.join([cmd, '--lock_type=' + lock])
-        cmd = ' '.join([cmd, '//qplock/benchmark:main --'])
+        cmd = ' '.join([cmd, '--log_level=' + FLAGS.log_level])
+        cmd = ' '.join([cmd, '//qplock/benchmark/baseline:main --'])
     else:
         cmd = ' '.join([cmd, 'build'])
         cmd = ' '.join([cmd, FLAGS.bazel_flags])
         cmd = ' '.join([cmd, '--lock_type=' + lock])
+        cmd = ' '.join([cmd, '--log_level=' + FLAGS.log_level])
         cmd = ' '.join([cmd, '--copt=-g', '--strip=never',
-                        '//qplock/benchmark:main'])
+                        '//qplock/benchmark/baseline:main'])
         cmd = ' '.join([cmd, '&& gdb -ex run -ex bt -ex q -ex y --args',
-                        'bazel-bin/qplock/benchmark/main'])
+                        'bazel-bin/qplock/benchmark/baseline/main'])
         print(cmd)
     cmd = ' '.join([cmd, '--experiment_params', quote(make_one_line(params))])
     cmd = ' '.join([cmd, '--cluster', quote(make_one_line(cluster))])
@@ -272,31 +244,29 @@ def quote(line):
     return SINGLE_QUOTE + line + SINGLE_QUOTE
 
 
-def build_save_dir(ycsb):
-    return os.path.join(FLAGS.remote_save_dir, ycsb)
+def build_save_dir(lock):
+    return os.path.join(FLAGS.remote_save_dir, lock)
 
 
-def build_remote_save_dir(ycsb):
+def build_remote_save_dir(lock):
     return os.path.join(
         FLAGS.save_root, FLAGS.remote_save_dir) + '/*'
 
 
-def build_local_save_dir(ycsb, public_hostname):
-    return os.path.join(FLAGS.local_save_dir, ycsb, public_hostname) + '/'
+def build_local_save_dir(lock, public_hostname):
+    return os.path.join(FLAGS.local_save_dir, lock, public_hostname) + '/'
 
 
-# def build_experiment_params(ycsb, workers):
 def fill_experiment_params_common(
-        proto, experiment_name, ycsb, lock, nservers, nclients, think):
+        proto, experiment_name, lock, nservers, nclients, think):
     proto.name = experiment_name
-    # proto.num_servers = nservers
+    proto.num_servers = nservers
     proto.num_clients = nclients
     proto.cluster_size = nclients + nservers
     # proto.num_readonly = nreadonly
     proto.workload.runtime = FLAGS.runtime
     proto.workload.think_time_ns = think
     proto.save_dir = build_save_dir(lock)
-    # proto.workload.ycsb = get_ycsb(ycsb)
     # proto.workload.min_key = FLAGS.min_key
     # proto.workload.max_key = FLAGS.max_key
     # proto.workload.theta = FLAGS.theta
@@ -325,18 +295,23 @@ def build_client_experiment_params(clients):
     return proto
 
 
-def build_get_data_command(ycsb, node, cluster):
-    src = build_remote_save_dir(ycsb)
-    dest = build_local_save_dir(ycsb, node.public_hostname)
+def build_get_data_command(lock, node, cluster):
+    src = build_remote_save_dir(lock)
+    print("\nSRC : ", src)
+    dest = build_local_save_dir(lock, node.public_hostname)
+    print("\nDEST : ", dest)
     os.makedirs(dest, exist_ok=True)
+    print('\nCOMMAND:' + 'rsync -aq ' + FLAGS.ssh_user + '@' + build_hostname(
+        node.public_hostname, cluster.domain) + ':' + ' '.join(
+        [src, dest]))
     return 'rsync -aq ' + FLAGS.ssh_user + '@' + build_hostname(
         node.public_hostname, cluster.domain) + ':' + ' '.join(
         [src, dest])
 
 
-def build_logfile_path(ycsb, experiment_name, mode, node):
+def build_logfile_path(lock, experiment_name, mode, node):
     return os.path.join(
-        FLAGS.log_dest, ycsb, experiment_name, mode, node.public_hostname +
+        FLAGS.log_dest, lock, experiment_name, mode, node.public_hostname +
         '_' + str(node.nid) + '.log')
 
 
@@ -352,7 +327,7 @@ def __run__(cmd, outfile, retries):
             except subprocess.CalledProcessError:
                 failures += 1
         print(
-            f'\t> Command failed. Check logs: {outfile} (trial {failures}/100)')
+            f'\t> Command failed. Check logs: {outfile} (trial {failures}/10)')
 
 
 def execute(experiment_name, commands):
@@ -374,7 +349,7 @@ def execute(experiment_name, commands):
 
 
 def main(args):
-    debugpy_hook()
+    debugpy_hook() 
     if FLAGS.get_data:
         nodes_csv, _ = partition_nodefile(FLAGS.nodefile, -1)
         cluster_proto, nodes = parse_servers(nodes_csv, 0, len(nodes_csv))
@@ -394,17 +369,17 @@ def main(args):
             datafile = '__data__.csv'
         if not os.path.exists(datafile):
             plot.generate_csv(FLAGS.local_save_dir, datafile)
-        plot.plot(datafile, FLAGS.ycsb)
+        plot.plot(datafile, FLAGS.lock_type)
         if FLAGS.datafile is None:
             os.remove(datafile)
     else:
         columns = ['lock', 's',  'c', 't',  'done']
         experiments = {}
         if not FLAGS.dry_run and os.path.exists(FLAGS.expfile):
+            print("EXP FILE EXISTS: ", os.path.abspath(FLAGS.expfile))
             experiments = pandas.read_csv(FLAGS.expfile, index_col='row')
         else:
             configurations = list(itertools.product(
-                # set(FLAGS.ycsb),
                 set(FLAGS.lock_type),
                 set(FLAGS.servers),
                 set(FLAGS.clients),
@@ -420,8 +395,6 @@ def main(args):
                     bar()
                     continue
 
-                # ycsb = row['ycsb']
-                ycsb = ''
                 lock = row['lock']
                 s_count = row['s']
                 c_count = row['c']
@@ -451,7 +424,7 @@ def main(args):
                             params = build_server_experiment_params(
                                 server.nid)
                             params = fill_experiment_params_common(
-                                params, experiment_name, ycsb, lock, s_count,
+                                params, experiment_name, lock, s_count,
                                 c_count, think)
                             run_command = build_common_command(
                                 lock, params, cluster_proto)
@@ -470,7 +443,7 @@ def main(args):
                         params = build_client_experiment_params(
                             client_list)
                         params = fill_experiment_params_common(
-                            params, experiment_name, ycsb, lock, s_count,
+                            params, experiment_name, lock, s_count,
                             c_count, think)
                         run_command = build_common_command(
                             lock, params, cluster_proto)

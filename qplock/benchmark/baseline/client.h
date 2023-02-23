@@ -81,7 +81,9 @@ public:
   absl::Status Start() override {
     ROME_INFO("Starting client...");
     auto status = lock_.Init(host_, peers_);
-    barrier_->arrive_and_wait(); //waits for all clients to get lock Initialized, addr from host
+    ROME_DEBUG("did i make it here?");
+    barrier_->arrive_and_wait(); //waits for all cliens to get lock Initialized, addr from host
+    ROME_DEBUG("status ");
     return status;
   }
 
@@ -95,6 +97,7 @@ public:
                  experiment_params_.workload().think_time_ns()))
         ;
     }
+    ROME_DEBUG("Unlocking...");
     lock_.Unlock();
     return absl::OkStatus();
   }

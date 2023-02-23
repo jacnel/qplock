@@ -1,0 +1,12 @@
+[launch]
+user = adb321
+cmd_prefix = cd /users/adb321/qplock_rome/qplock/ && 
+save_root = /users/adb321/qplock_rome/qplock/bazel-bin/qplock/benchmark/main.runfiles/qplock
+dest_root = /home/amanda/qplock_rome/qplock/qplock/benchmark/results
+bazel_bin = /users/adb321/go/bin/bazelisk
+
+[workload]
+experiment_params = runtime: 10 max_qps: -1 sampling_rate_ms: 50 
+experiments = ["n1", "n3", "n5", "n7"]
+
+[n1]

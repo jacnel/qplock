@@ -4,7 +4,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "qplock/benchmark/experiment.pb.h"
+#include "qplock/benchmark/baseline/experiment.pb.h"
 #include "qplock/rdma_mcs_lock.h"
 #include "qplock/rdma_spin_lock.h"
 #include "rome/rdma/connection_manager/connection_manager.h"

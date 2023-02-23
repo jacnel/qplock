@@ -30,7 +30,8 @@ absl::Status RdmaMcsLock::Init(MemoryPool::Peer host,
   auto capacity = 1 << 20;
   auto status = pool_.Init(capacity, peers);
   ROME_ASSERT_OK(status);
-
+  ROME_INFO("MEM POOL FOR RDMA MCS LOCK CREATED");
+  
   // Reserve remote memory for the local descriptor.
   desc_pointer_ = pool_.Allocate<Descriptor>();
   descriptor_ = reinterpret_cast<Descriptor *>(desc_pointer_.address());
@@ -87,7 +88,7 @@ bool RdmaMcsLock::IsLocked() {
 }
 
 void RdmaMcsLock::Lock() {
-  // TODO: not currently set up to swap the correct address?
+  // TODO: CURRENTLY ONLY IMPLEMENTED FOR REMOTE CLIENTS
   ROME_ASSERT_DEBUG(!is_host_, "Unimplemented!");  
   // Set local descriptor to initial values
   descriptor_->budget = -1;
@@ -115,7 +116,7 @@ void RdmaMcsLock::Lock() {
       ROME_DEBUG("Budget exhausted (id={})",
                  static_cast<uint64_t>(desc_pointer_.id()));
       // TODO: INJECT THE CALL TO REACQUIRE
-      
+
       descriptor_->budget = kInitBudget;
     }
   } else { //no one had the lock, we were swapped in
@@ -132,6 +133,7 @@ void RdmaMcsLock::Lock() {
 
 void RdmaMcsLock::Unlock() {
   std::atomic_thread_fence(std::memory_order_release);
+  // TODO: CURRENTLY ONLY IMPLEMENTED FOR REMOTE CLIENTS
   ROME_ASSERT_DEBUG(!is_host_, "Unimplemented!");
   // if lock_pointer_ == my desc (we are the tail), set it to 0 to unlock
   // otherwise, someone else is contending for lock and we want to give it to them

@@ -8,7 +8,7 @@
 #include <thread>
 
 #include "util.h"
-#include "common.h"
+#include "a_lock.h"
 
 namespace X{
 

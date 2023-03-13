@@ -40,7 +40,10 @@ ABSL_FLAG(ExperimentParams, experiment_params, {}, "Experimental parameters");
 using ::util::SystemClock;
 
 std::function<void(int)> signal_handler_internal;
-void signal_handler(int signum) { signal_handler_internal(signum); }
+void signal_handler(int signum) { 
+  std::cout << "HANDLER!!!\n";
+  signal_handler_internal(signum); 
+}
 volatile bool done = false;
 
 int main(int argc, char *argv[]) {

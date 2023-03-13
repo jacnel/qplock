@@ -12,7 +12,7 @@
 #include "util.h"
 #include "remote_lock_handle.h"
 #include "lock_handle.h"
-#include "common.h"
+#include "a_lock.h"
 
 namespace X {
 

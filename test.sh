@@ -1,7 +1,7 @@
 #!/bin/bash
 
 workspace=/home/amanda/qplock_rome/qplock/qplock
-nodefile=~/qplock_rome/qplock/qplock/benchmark/nodefiles/c6525-25g.csv
+nodefile=~/qplock_rome/qplock/qplock/benchmark/nodefiles/xl170.csv
 
 #** FUNCTION DEFINITIONS **#
 
@@ -39,7 +39,7 @@ build_lock() {
 
 # #  LOCAL WORKLOAD PERFORMANCE
 echo "Running Experiment #1: Spin Lock vs MCS vs A-Lock, 1 lock on 1 server"
-lock='alock'
+lock='mcs'
 log_level='debug'
 echo "Building ${lock}..."
 build_lock ${lock}
@@ -48,6 +48,6 @@ echo "Running..."
 save_dir="exp1"
 for num_clients in 10
 do
-  bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321 -c ${num_clients} -s 1 --think_ns=500 --runtime=3 --remote_save_dir=${save_dir} --log_level=${log_level} --lock_type=${lock} --gdb=True
+  bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321 -c ${num_clients} -s 1 --think_ns=500 --runtime=1 --remote_save_dir=${save_dir} --log_level=${log_level} --lock_type=${lock} --gdb=True
 done
-bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321  --get_data  --local_save_dir=${workspace}/benchmark/baseline/results/${save_dir}/ --remote_save_dir=${save_dir} --lock_type=${lock}
+# bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321  --get_data  --local_save_dir=${workspace}/benchmark/baseline/results/${save_dir}/ --remote_save_dir=${save_dir} --lock_type=${lock}

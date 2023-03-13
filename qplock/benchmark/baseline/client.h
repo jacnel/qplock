@@ -6,8 +6,8 @@
 #include <memory>
 #include <unordered_map>
 
-#include "qplock/rdma_mcs_lock.h"
-#include "qplock/rdma_spin_lock.h"
+// #include "qplock/rdma_mcs_lock.h"
+// #include "qplock/rdma_spin_lock.h"
 #include "rome/colosseum/qps_controller.h"
 #include "rome/colosseum/streams/streams.h"
 #include "rome/colosseum/workload_driver.h"
@@ -27,6 +27,12 @@ public:
         new Client(self, server, peers, experiment_params, barrier));
   }
 
+  static void signal_handler(int signum) { 
+    ROME_INFO("HANDLER!!!\n");
+    driver_->Stop();
+    exit(1);
+  }
+
   static absl::StatusOr<ResultProto>
   Run(std::unique_ptr<Client> client, const ExperimentParams &experiment_params,
       volatile bool *done) {
@@ -42,11 +48,11 @@ public:
     auto *client_ptr = client.get();
 
     // Create and start the workload driver (also starts client).
-    auto driver = rome::WorkloadDriver<rome::NoOp>::Create(
+    driver_ = rome::WorkloadDriver<rome::NoOp>::Create(
         std::move(client), std::make_unique<rome::NoOpStream>(),
         qps_controller.get(),
         std::chrono::milliseconds(experiment_params.sampling_rate_ms()));
-    ROME_ASSERT_OK(driver->Start());
+    ROME_ASSERT_OK(driver_->Start());
 
     // Sleep while driver is running then stop it.
     if (experiment_params.workload().has_runtime() &&
@@ -63,13 +69,13 @@ public:
       }
     }
     ROME_INFO("Stopping client...");
-    ROME_ASSERT_OK(driver->Stop());
+    ROME_ASSERT_OK(driver_->Stop());
 
     // Output results.
     ResultProto result;
     result.mutable_experiment_params()->CopyFrom(experiment_params);
     result.mutable_client()->CopyFrom(client_ptr->ToProto());
-    result.mutable_driver()->CopyFrom(driver->ToProto());
+    result.mutable_driver()->CopyFrom(driver_->ToProto());
 
     // Sleep for a hot sec to let the server receive the messages sent by the
     // clients before disconnecting.
@@ -81,9 +87,7 @@ public:
   absl::Status Start() override {
     ROME_INFO("Starting client...");
     auto status = lock_.Init(host_, peers_);
-    ROME_DEBUG("did i make it here?");
     barrier_->arrive_and_wait(); //waits for all cliens to get lock Initialized, addr from host
-    ROME_DEBUG("status ");
     return status;
   }
 
@@ -99,6 +103,8 @@ public:
     }
     ROME_DEBUG("Unlocking...");
     lock_.Unlock();
+    count++;
+    ROME_DEBUG("COUNT : {}", count);
     return absl::OkStatus();
   }
 
@@ -117,6 +123,11 @@ public:
     return absl::OkStatus();
   }
 
+  absl::Status GracefulShutdown() {
+    ROME_DEBUG("Gracefully shutting down client...");
+    return absl::OkStatus();
+  }
+
   NodeProto ToProto() {
     NodeProto client;
     *client.mutable_private_hostname() = self_.address;
@@ -128,16 +139,20 @@ public:
 private:
   Client(const Peer &self, const Peer &host, const std::vector<Peer> &peers,
          const ExperimentParams &experiment_params, std::barrier<> *barrier)
-      : experiment_params_(experiment_params), self_(self), host_(host),
+      : experiment_params_(experiment_params), count(0), self_(self), host_(host),
         peers_(peers), barrier_(barrier),
         pool_(self_, std::make_unique<cm_type>(self.id)), lock_(self_, pool_) {}
 
   ExperimentParams experiment_params_;
 
+  int count;
+
   const Peer self_;
   const Peer host_;
   std::vector<Peer> peers_;
   std::barrier<> *barrier_;
+
+  std::unique_ptr<rome::WorkloadDriver<rome::NoOp>> driver_;
 
   MemoryPool pool_;
   LockType lock_;

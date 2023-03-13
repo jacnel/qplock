@@ -5,8 +5,8 @@ cc_library(
 )
 
 cc_library(
-    name = "common",
-    hdrs = ["common.h"],
+    name = "alock-common",
+    hdrs = ["a_lock.h"],
     deps = [
         ":util",
         "@rome//rome/rdma/memory_pool",
@@ -61,7 +61,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":util",
-        ":common",
+        ":alock-common",
         ":lock_handle",
         ":remote_lock_handle",
         "@rome//rome/rdma:rdma_memory",
@@ -79,7 +79,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":util",
-        ":common",
+        ":alock-common",
         "@rome//rome/rdma:rdma_memory",
         "@rome//rome/rdma/channel:sync_accessor",
         "@rome//rome/rdma/connection_manager",
@@ -95,7 +95,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":util",
-        ":common",
+        ":alock-common",
         "@rome//rome/rdma:rdma_memory",
         "@rome//rome/rdma/channel:sync_accessor",
         "@rome//rome/rdma/connection_manager",

@@ -31,23 +31,39 @@ build_lock() {
 
 #** START OF SCRIPT **#
 
-# echo "Cleaning..."
-# clean
+echo "Cleaning..."
+clean
 
 # echo "Pushing local repo to remote nodes..."
-# sync_nodes
+sync_nodes
 
-# #  LOCAL WORKLOAD PERFORMANCE
-echo "Running Experiment #1: Spin Lock vs MCS vs A-Lock, 1 lock on 1 server"
-lock='mcs'
-log_level='debug'
+#  LOCAL WORKLOAD PERFORMANCE
+# echo "Running Experiment #1"
+# lock='mcs'
+# log_level='info'
+# echo "Building ${lock}..."
+# build_lock ${lock}
+
+# echo "Running..."
+# save_dir="exp1_mcs"
+# for num_clients in 2
+# do
+#   bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321 -c ${num_clients} -s 1 --think_ns=500 --runtime=10 --remote_save_dir=${save_dir} --log_level=${log_level} --lock_type=${lock}
+# done
+# bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321  --get_data  --local_save_dir=${workspace}/benchmark/baseline/results/${save_dir}/ --remote_save_dir=${save_dir} --lock_type=${lock}
+
+
+
+echo "Running Experiment #2"
+lock='alock'
+log_level='info'
 echo "Building ${lock}..."
 build_lock ${lock}
 
 echo "Running..."
-save_dir="exp1"
-for num_clients in 10
+save_dir="exp3_alock"
+for num_clients in 2 3 4 5 6 7 8 9 
 do
-  bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321 -c ${num_clients} -s 1 --think_ns=500 --runtime=1 --remote_save_dir=${save_dir} --log_level=${log_level} --lock_type=${lock} --gdb=True
+  bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321 -c ${num_clients} -s 1 --think_ns=500 --runtime=10 --remote_save_dir=${save_dir} --log_level=${log_level} --lock_type=${lock}
 done
-# bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321  --get_data  --local_save_dir=${workspace}/benchmark/baseline/results/${save_dir}/ --remote_save_dir=${save_dir} --lock_type=${lock}
+bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321  --get_data  --local_save_dir=${workspace}/benchmark/baseline/results/${save_dir}/ --remote_save_dir=${save_dir} --lock_type=${lock}

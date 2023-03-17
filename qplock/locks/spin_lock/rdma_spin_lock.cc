@@ -1,16 +1,5 @@
 #include "rdma_spin_lock.h"
 
-#include <infiniband/verbs.h>
-
-#include <atomic>
-#include <cstdint>
-#include <memory>
-#include <thread>
-
-#include "rome/rdma/connection_manager/connection_manager.h"
-#include "rome/rdma/memory_pool/remote_ptr.h"
-#include "util.h"
-
 namespace X {
 
 using ::rome::rdma::ConnectionManager;

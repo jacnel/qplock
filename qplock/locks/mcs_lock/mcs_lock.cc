@@ -1,15 +1,5 @@
 #include "mcs_lock.h"
 
-#include <infiniband/verbs.h>
-
-#include <atomic>
-#include <cstdint>
-#include <memory>
-#include <thread>
-
-#include "util.h"
-#include "rome/util/thread_util.h"
-
 namespace X {
 
 void McsLock::Lock() {

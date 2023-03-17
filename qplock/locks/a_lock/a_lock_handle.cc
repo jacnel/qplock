@@ -1,18 +1,5 @@
 #include "a_lock_handle.h"
 
-#include <infiniband/verbs.h>
-
-#include <atomic>
-#include <cstdint>
-#include <memory>
-#include <thread>
-
-#include "rome/rdma/connection_manager/connection_manager.h"
-#include "rome/rdma/memory_pool/remote_ptr.h"
-#include "util.h"
-
-
-
 namespace X {
 
 using ::rome::rdma::ConnectionManager;
@@ -85,17 +72,15 @@ bool inline ALockHandle::IsLocal(){
 //Eventually will take in remote_ptr<ALock> once using sharding or just an offset?
 void ALockHandle::Lock(){
   // ROME_ASSERT_DEBUG((r_handle_ != NULL || l_handle_ != NULL),"Lock() was already called on ALockHandle");
-  // TODO: SEGFAULT ON LINE BELOW
+  // SEGFAULT ON LINE BELOW
   // ROME_ASSERT(a_lock_->locked == false, "Attempting to lock handle that is already locked.")
   if (IsLocal()){ 
     ROME_DEBUG("ALock is LOCAL");
-    //client is local to the desired ALock
     l_handle_->Init(a_lock_pointer_);
     std::atomic_thread_fence(std::memory_order_release);
     l_handle_->Lock();
   } else {
     ROME_DEBUG("ALock is REMOTE");
-    //client is remote to the desired ALock
     r_handle_->Init(a_lock_pointer_);
     std::atomic_thread_fence(std::memory_order_release);
     r_handle_->Lock();

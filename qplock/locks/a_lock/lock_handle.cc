@@ -1,12 +1,5 @@
 #include "lock_handle.h"
 
-#include <assert.h>
-
-#include <atomic>
-#include <cstdint>
-#include <iostream>
-#include <thread>
-
 namespace X {
 
 using ::rome::rdma::ConnectionManager;

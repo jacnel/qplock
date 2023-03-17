@@ -52,9 +52,6 @@ private:
   // Used for rdma writes
   remote_ptr<ALock> prealloc_;
 
-  // // Points to first lock on the host
-  // remote_ptr<remote_ptr<ALock>> lock_pointer_;
-
   //Pointer to desc to allow it to be read/write via rdma
   remote_ptr<ALock> a_lock_pointer_;
   volatile ALock *a_lock_;

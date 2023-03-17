@@ -6,9 +6,9 @@
 
 #include "absl/status/status.h"
 #include "qplock/benchmark/baseline/experiment.pb.h"
-#include "qplock/rdma_mcs_lock.h"
-#include "qplock/rdma_spin_lock.h"
-#include "qplock/a_lock_handle.h"
+#include "qplock/locks/rdma_mcs_lock/rdma_mcs_lock.h"
+#include "qplock/locks/spin_lock/rdma_spin_lock.h"
+#include "qplock/locks/a_lock/a_lock_handle.h"
 #include "rome/colosseum/client_adaptor.h"
 #include "rome/colosseum/streams/streams.h"
 #include "rome/logging/logging.h"

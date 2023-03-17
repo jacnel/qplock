@@ -12,7 +12,7 @@
 #include "rome/rdma/connection_manager/connection_manager.h"
 #include "rome/rdma/memory_pool/memory_pool.h"
 #include "rome/rdma/rdma_memory.h"
-#include "util.h"
+#include "../../util.h"
 
 namespace X {
 

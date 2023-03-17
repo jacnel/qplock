@@ -28,10 +28,6 @@ absl::Status ALockHandle::Init(MemoryPool::Peer host,
     a_lock_pointer_ = pool_.Allocate<ALock>();
     proto.set_raddr(a_lock_pointer_.address());
     ROME_DEBUG("Lock pointer {:x}", static_cast<uint64_t>(a_lock_pointer_));
-    //! This might need to change because it's no longer a nested pointer but not sure 
-    // TODO: THIS MIGHT BE THE BUG >:(
-    // *(std::to_address(a_lock_pointer_)) = remote_ptr<ALock>(0);
-    // a_lock_ = reinterpret_cast<ALock *>(a_lock_pointer_.address());
     // tell all the peers where to find the addr of the first lock
     for (const auto &p : peers) {
       auto conn_or = pool_.connection_manager()->GetConnection(p.id);
@@ -86,11 +82,9 @@ void ALockHandle::Lock(){
     r_handle_->Lock();
   }
   // a_lock_->locked = true;
-  std::atomic_thread_fence(std::memory_order_release);
 }
 
 void ALockHandle::Unlock(){
-  std::atomic_thread_fence(std::memory_order_release);
   // ROME_ASSERT(a_lock_->locked == true, "Attempting to unlock handle that is not locked.")
   if (IsLocal()){
     ROME_ASSERT_DEBUG(l_handle_ != NULL, "Attempting to unlock null local lock handle");
@@ -99,7 +93,6 @@ void ALockHandle::Unlock(){
     ROME_ASSERT_DEBUG(r_handle_ != NULL, "Attempting to unlock null remote lock handle");
     r_handle_->Unlock();
   }
-  std::atomic_thread_fence(std::memory_order_release);
   // a_lock_->locked = false;
 }
 

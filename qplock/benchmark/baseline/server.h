@@ -29,7 +29,9 @@ public:
 
   absl::Status Launch(volatile bool *done, int runtime_s) {
     ROME_DEBUG("Starting server...");
+
     signal(SIGINT, signal_handler);
+    
     auto status =
         lock_.Init(self_, peers_); // Starts `cm_` and connects to peers
     ROME_CHECK_OK(ROME_RETURN(status), status);

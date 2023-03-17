@@ -20,8 +20,8 @@ RemoteLockHandle::RemoteLockHandle(MemoryPool::Peer self, MemoryPool &pool)
      : self_(self), pool_(pool), is_locked_(false), is_leader_(false) {}
 
 absl::Status RemoteLockHandle::Init(remote_ptr<ALock> a_lock){
-    ROME_DEBUG("Remote Handle A Lock pointer {:x}", static_cast<uint64_t>(a_lock_));
     a_lock_ = decltype(a_lock_)(a_lock.id(), a_lock.address());
+    ROME_DEBUG("Remote Handle A Lock pointer {:x}", static_cast<uint64_t>(a_lock_));
     r_tail_ = decltype(r_tail_)(a_lock.id(), a_lock.address());
     // TODO: THIS MUST BE WRONG
     l_tail_ = decltype(l_tail_)(a_lock.id(), a_lock.address() + 16); //!Should make sure this is accurate way to point to descriptors
@@ -83,13 +83,16 @@ void RemoteLockHandle::LockMcsQueue(){
     descriptor_->budget = -1;
     descriptor_->next = remote_nullptr;
 
+    //TODO: global lock
+    // glock.lock();
     // swap local RdmaDescriptor in at the address of the hosts lock pointer
     auto prev =
       pool_.AtomicSwap(r_tail_, static_cast<uint64_t>(desc_pointer_));
     
     if (prev != remote_nullptr) { //someone else has the lock
         auto temp_ptr = remote_ptr<uint8_t>(prev);
-        temp_ptr += 64; //temp_ptr = next field of the current tail's RdmaDescriptor
+        // TODO: MAKE SURE THIS IS CORRECT
+        temp_ptr +=32; //temp_ptr = next field of the current tail's RdmaDescriptor
         ROME_DEBUG("Prev RdmaDescriptor at Tail: prev={:x}, temp_ptr={:x}",
                 static_cast<uint64_t>(prev), static_cast<uint64_t>(temp_ptr));
         // make prev point to the current tail RdmaDescriptor's next pointer
@@ -98,6 +101,8 @@ void RemoteLockHandle::LockMcsQueue(){
         pool_.Write<remote_ptr<RdmaDescriptor>>(
             static_cast<remote_ptr<remote_ptr<RdmaDescriptor>>>(prev), desc_pointer_,
             prealloc_);
+        //THis glock will tell us if we have a race condition between swapping the rtail and the writing the next
+        // glock.unlock();
         ROME_DEBUG("[Lock] Enqueued: {} --> (id={})",
                 static_cast<uint64_t>(prev.id()),
                 static_cast<uint64_t>(desc_pointer_.id()));
@@ -140,17 +145,23 @@ void RemoteLockHandle::Lock(){
 
 void RemoteLockHandle::Unlock(){
     // Make sure everything finished before unlocking
+    //! LMAO THIS IS FUCKING DUMB
     std::atomic_thread_fence(std::memory_order_release);
     // if r_tail_ == my desc (we are the tail), set it to 0 to unlock
     // otherwise, someone else is contending for lock and we want to give it to them
     // try to swap in a 0 to unlock the RdmaDescriptor at the addr of the remote tail, which we expect to currently be equal to our RdmaDescriptor
     auto prev = pool_.CompareAndSwap(r_tail_,
                                     static_cast<uint64_t>(desc_pointer_), 0);
+    // TODO: VERIFY THAT RTAIL IS NULL HERE
+    //follow all next pointers and print the whole queue
+
     if (prev != desc_pointer_) {  // if the lock at r_tail_ was not equal to our RdmaDescriptor (new people have enqueued since)
         // attempt to hand the lock to prev
         // spin while no one is set to go next
-        while (descriptor_->next == remote_nullptr)
-        ;
+        while (descriptor_->next == remote_nullptr){
+            ROME_DEBUG("I AM STUCK");
+            std::this_thread::sleep_for(std::chrono::seconds(10));
+        }
         std::atomic_thread_fence(std::memory_order_acquire);
         // gets a pointer to the next RdmaDescriptor object
         auto next = const_cast<remote_ptr<RdmaDescriptor> &>(descriptor_->next);

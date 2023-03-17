@@ -77,16 +77,13 @@ bool ALockHandle::IsLocked() {
   return false;
 }
 
-// may need to change to take in an addr
+// may need to change to take in an addr for when we expand to multiple locks
 bool inline ALockHandle::IsLocal(){
-  bool isLocal = ((a_lock_pointer_).id() == self_.id);
-  ROME_DEBUG("Checking if alock isLocal: {}", isLocal);
-  return isLocal;
+  return ((a_lock_pointer_).id() == self_.id);
 }
 
-//Eventually will take in remote_ptr<ALock> once using sharding
+//Eventually will take in remote_ptr<ALock> once using sharding or just an offset?
 void ALockHandle::Lock(){
-  ROME_DEBUG("trying to lock alock...");
   // ROME_ASSERT_DEBUG((r_handle_ != NULL || l_handle_ != NULL),"Lock() was already called on ALockHandle");
   // TODO: SEGFAULT ON LINE BELOW
   // ROME_ASSERT(a_lock_->locked == false, "Attempting to lock handle that is already locked.")

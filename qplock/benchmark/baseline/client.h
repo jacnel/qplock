@@ -27,15 +27,21 @@ public:
         new Client(self, server, peers, experiment_params, barrier));
   }
 
-  static void signal_handler(int signum) { 
-    ROME_INFO("HANDLER!!!\n");
-    driver_->Stop();
+  static void signal_handler(int signal) { 
+    ROME_INFO("SIGNAL: ", signal, " HANDLER!!!\n");
+    // TODO: SHould be called with a driver but not sure how to move ownership of ptr..
+    // this->Stop();
+    // Wait for all clients to be done shutting down
+    std::this_thread::sleep_for(std::chrono::seconds(5));
     exit(1);
   }
 
   static absl::StatusOr<ResultProto>
   Run(std::unique_ptr<Client> client, const ExperimentParams &experiment_params,
       volatile bool *done) {
+    //Signal Handler
+    signal(SIGINT, signal_handler);
+    
     // Setup qps_controller.
     std::unique_ptr<rome::LeakyTokenBucketQpsController<util::SystemClock>>
         qps_controller;
@@ -48,34 +54,37 @@ public:
     auto *client_ptr = client.get();
 
     // Create and start the workload driver (also starts client).
-    driver_ = rome::WorkloadDriver<rome::NoOp>::Create(
+    auto driver = rome::WorkloadDriver<rome::NoOp>::Create(
         std::move(client), std::make_unique<rome::NoOpStream>(),
         qps_controller.get(),
         std::chrono::milliseconds(experiment_params.sampling_rate_ms()));
-    ROME_ASSERT_OK(driver_->Start());
-
-    // Sleep while driver is running then stop it.
-    if (experiment_params.workload().has_runtime() &&
-        experiment_params.workload().runtime() > 0) {
-      ROME_INFO("Running workload for {}s",
-                experiment_params.workload().runtime());
-      auto runtime =
-          std::chrono::seconds(experiment_params.workload().runtime());
-      std::this_thread::sleep_for(runtime);
-    } else {
-      ROME_INFO("Running workload indefinitely");
-      while (!(*done)) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-      }
-    }
+    ROME_ASSERT_OK(driver->Start());
+    
+    // NOT WORKING RN
+    // // Sleep while driver is running then stop it.
+    // if (experiment_params.workload().has_runtime() &&
+    //     experiment_params.workload().runtime() > 0) {
+    //   ROME_INFO("Running workload for {}s",
+    //             experiment_params.workload().runtime());
+    //   auto runtime =
+    //       std::chrono::seconds(experiment_params.workload().runtime());
+    //   std::this_thread::sleep_for(runtime);
+    // } else {
+    //   ROME_INFO("Running workload indefinitely");
+    //   while (!(*done)) {
+    //     std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    //   }
+    // }
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+    //Just sleep here for 10 seconds
     ROME_INFO("Stopping client...");
-    ROME_ASSERT_OK(driver_->Stop());
+    ROME_ASSERT_OK(driver->Stop());
 
     // Output results.
     ResultProto result;
     result.mutable_experiment_params()->CopyFrom(experiment_params);
     result.mutable_client()->CopyFrom(client_ptr->ToProto());
-    result.mutable_driver()->CopyFrom(driver_->ToProto());
+    result.mutable_driver()->CopyFrom(driver->ToProto());
 
     // Sleep for a hot sec to let the server receive the messages sent by the
     // clients before disconnecting.
@@ -123,11 +132,6 @@ public:
     return absl::OkStatus();
   }
 
-  absl::Status GracefulShutdown() {
-    ROME_DEBUG("Gracefully shutting down client...");
-    return absl::OkStatus();
-  }
-
   NodeProto ToProto() {
     NodeProto client;
     *client.mutable_private_hostname() = self_.address;
@@ -151,8 +155,6 @@ private:
   const Peer host_;
   std::vector<Peer> peers_;
   std::barrier<> *barrier_;
-
-  std::unique_ptr<rome::WorkloadDriver<rome::NoOp>> driver_;
 
   MemoryPool pool_;
   LockType lock_;

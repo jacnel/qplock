@@ -39,6 +39,8 @@ ABSL_FLAG(ExperimentParams, experiment_params, {}, "Experimental parameters");
 
 using ::util::SystemClock;
 
+// std::vector<unique_ptr<Client>> client_ptrs;
+
 std::function<void(int)> signal_handler_internal;
 void signal_handler(int signum) { 
   std::cout << "HANDLER!!!\n";
@@ -127,6 +129,7 @@ int main(int argc, char *argv[]) {
         // call Client::Connect() --> should store remote_ptr to first node in the kv store and first qp lock
         // Client::Connect(std::move(client));
         return Client::Run(std::move(client), experiment_params, &done);
+        //  rather than returning this, call run, sleep, then stop
       }));
     }
 

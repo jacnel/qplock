@@ -15,11 +15,11 @@ namespace X {
 template <typename K, typename V>
 class Server {
   using key_type = K;
-  using value_type = V;
+  using lock_type = V;
   using MemoryPool = rome::rdma::MemoryPool;
 
  public:
-  using tree_type = Datastore;
+  using ds_type = std::unordered_map<K, std::unique_ptr<V>>;
 
   ~Server();
   Server(const ServerProto& server, const ClusterProto& cluster,
@@ -33,7 +33,8 @@ class Server {
   void HandleRequest(const RequestProto& req);
 
   std::unique_ptr<MemoryPool> pool_;
-  std::unique_ptr<tree_type> ds_;
+  std::unique_ptr<ds_type> ds_;
+  std::unordered_map<uint16_t, std::unique_ptr<RdmaMcsLock>> locks_;
   std::unique_ptr<RequestHandlerPool<key_type, value_type>> handler_pool_;
 
   // static inline thread_local struct client_ctx_t {

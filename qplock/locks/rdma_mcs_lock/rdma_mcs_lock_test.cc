@@ -16,10 +16,10 @@ namespace {
 
 using Conn = RdmaMcsLock::conn_type;
 
-constexpr char kIpAddress[] = "10.0.0.1";
-constexpr char kIpAddress2[] = "10.0.0.2";
-// constexpr char kIpAddress[] = "10.10.1.1";
-// constexpr char kIpAddress2[] = "10.10.1.2";
+// constexpr char kIpAddress[] = "10.0.0.1";
+// constexpr char kIpAddress2[] = "10.0.0.2";
+constexpr char kIpAddress[] = "10.10.1.1";
+constexpr char kIpAddress2[] = "10.10.1.2";
 constexpr uint16_t kHostId = 0;
 constexpr uint16_t kHostPort = 18000;
 

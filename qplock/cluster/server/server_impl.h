@@ -27,16 +27,16 @@ Server<K, V>::Server(const ServerProto& server, const ClusterProto& cluster,
                      bool prefill, int num_handlers) {
   auto name = server.node().name();
   auto nid = server.node().nid();
-  auto rome_port = server.node().rome_port();
+  auto port = server.node().port();
 
   auto cm = std::make_unique<MemoryPool::cm_type>(nid);
-  pool_ = std::make_unique<MemoryPool>(MemoryPool::Peer(nid, name, rome_port),
+  pool_ = std::make_unique<MemoryPool>(MemoryPool::Peer(nid, name, port),
                                        std::move(cm));
 
   std::vector<MemoryPool::Peer> peers;
   peers.reserve(cluster.clients().size());
   for (auto c : cluster.clients()) {
-    peers.emplace_back(c.node().nid(), c.node().name(), c.node().rome_port());
+    peers.emplace_back(c.node().nid(), c.node().name(), c.node().port());
   }
   ROME_INFO("Clients: {}", peers.size());
   ROME_ASSERT_OK(pool_->Init(server.capacity(), peers));

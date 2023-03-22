@@ -33,7 +33,7 @@ public:
     // this->Stop();
     // Wait for all clients to be done shutting down
     std::this_thread::sleep_for(std::chrono::seconds(5));
-    exit(1);
+    exit(signal);
   }
 
   static absl::StatusOr<ResultProto>
@@ -59,24 +59,26 @@ public:
         qps_controller.get(),
         std::chrono::milliseconds(experiment_params.sampling_rate_ms()));
     ROME_ASSERT_OK(driver->Start());
-    
-    // NOT WORKING RN
-    // // Sleep while driver is running then stop it.
-    // if (experiment_params.workload().has_runtime() &&
-    //     experiment_params.workload().runtime() > 0) {
-    //   ROME_INFO("Running workload for {}s",
-    //             experiment_params.workload().runtime());
-    //   auto runtime =
-    //       std::chrono::seconds(experiment_params.workload().runtime());
-    //   std::this_thread::sleep_for(runtime);
-    // } else {
-    //   ROME_INFO("Running workload indefinitely");
-    //   while (!(*done)) {
-    //     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    //   }
+    // if (!(driver->Start()).ok()){
+    //   ROME_INFO("ABORT!!\n");
+    //   raise(SIGINT);
     // }
-    std::this_thread::sleep_for(std::chrono::seconds(10));
-    //Just sleep here for 10 seconds
+    
+    // NOT WORKING PROPERLY RN
+    // // Sleep while driver is running then stop it.
+    if (experiment_params.workload().has_runtime() &&
+        experiment_params.workload().runtime() > 0) {
+      ROME_INFO("Running workload for {}s", experiment_params.workload().runtime());
+      auto runtime = std::chrono::seconds(experiment_params.workload().runtime());
+      std::this_thread::sleep_for(runtime);
+    } else {
+      ROME_INFO("Running workload indefinitely");
+      while (!(*done)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      }
+    }
+    // Do this instead of above stuff but also doesnt solve issue?
+    // std::this_thread::sleep_for(std::chrono::seconds(10));
     ROME_INFO("Stopping client...");
     ROME_ASSERT_OK(driver->Stop());
 
@@ -96,6 +98,7 @@ public:
   absl::Status Start() override {
     ROME_INFO("Starting client...");
     auto status = lock_.Init(host_, peers_);
+    ROME_ASSERT_OK(status); //abort if init doesn't complete properly
     barrier_->arrive_and_wait(); //waits for all cliens to get lock Initialized, addr from host
     return status;
   }
@@ -106,14 +109,11 @@ public:
     auto start = util::SystemClock::now();
     if (experiment_params_.workload().has_think_time_ns()) {
       while (util::SystemClock::now() - start <
-             std::chrono::nanoseconds(
-                 experiment_params_.workload().think_time_ns()))
-        ;
+             std::chrono::nanoseconds(experiment_params_.workload().think_time_ns()))
+       ;
     }
     ROME_DEBUG("Unlocking...");
     lock_.Unlock();
-    count++;
-    ROME_DEBUG("COUNT : {}", count);
     return absl::OkStatus();
   }
 
@@ -143,13 +143,12 @@ public:
 private:
   Client(const Peer &self, const Peer &host, const std::vector<Peer> &peers,
          const ExperimentParams &experiment_params, std::barrier<> *barrier)
-      : experiment_params_(experiment_params), count(0), self_(self), host_(host),
+      : experiment_params_(experiment_params), self_(self), host_(host),
         peers_(peers), barrier_(barrier),
         pool_(self_, std::make_unique<cm_type>(self.id)), lock_(self_, pool_) {}
 
   ExperimentParams experiment_params_;
 
-  int count;
 
   const Peer self_;
   const Peer host_;

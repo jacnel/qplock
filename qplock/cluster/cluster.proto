@@ -94,7 +94,7 @@ message NodeProto {
   optional uint32 nid = 1;
   optional string name = 2;
   optional string public_name = 3;
-  optional uint32 rome_port = 4;
+  optional uint32 port = 4;
 };
 
 

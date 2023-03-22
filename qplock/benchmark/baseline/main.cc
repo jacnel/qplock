@@ -43,7 +43,7 @@ using ::util::SystemClock;
 
 std::function<void(int)> signal_handler_internal;
 void signal_handler(int signum) { 
-  std::cout << "HANDLER!!!\n";
+  ROME_INFO("HANDLER!!!\n");
   signal_handler_internal(signum); 
 }
 volatile bool done = false;
@@ -139,7 +139,7 @@ int main(int argc, char *argv[]) {
       ROME_ASSERT(r.valid(), "WTF");
       auto rproto = r.get();
       results.push_back(VALUE_OR_DIE(rproto));
-      // ROME_INFO("{}", VALUE_OR_DIE(rproto).DebugString());
+      ROME_INFO("{}", VALUE_OR_DIE(rproto).DebugString());
     }
 
     RecordResults(experiment_params, results);

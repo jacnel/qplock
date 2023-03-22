@@ -18,6 +18,7 @@ absl::Status RemoteLockHandle::Init(remote_ptr<ALock> a_lock){
     l_tail_ = decltype(l_tail_)(a_lock.id(), a_lock.address() + 16);
     victim_ = decltype(victim_)(a_lock.id(), a_lock.address() + 32);   
 
+    // ! ALLOCATING MEMORY AT RUN TIME IS A BAD IDEA!!
     // allocate memory for a RdmaDescriptor in mempool
     desc_pointer_ = pool_.Allocate<RdmaDescriptor>();
     descriptor_ = reinterpret_cast<RdmaDescriptor *>(desc_pointer_.address());

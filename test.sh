@@ -32,7 +32,7 @@ build_lock() {
 #** START OF SCRIPT **#
 
 echo "Cleaning..."
-clean
+# clean
 
 # echo "Pushing local repo to remote nodes..."
 sync_nodes
@@ -55,15 +55,18 @@ sync_nodes
 
 
 echo "Running Experiment #2"
+save_dir="exp3_alock"
 lock='alock'
 log_level='info'
 echo "Building ${lock}..."
-build_lock ${lock}
+# build_lock ${lock}
 
-echo "Running..."
-save_dir="exp3_alock"
-for num_clients in 2 3 4 5 6 7 8 9 
-do
-  bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321 -c ${num_clients} -s 1 --think_ns=500 --runtime=10 --remote_save_dir=${save_dir} --log_level=${log_level} --lock_type=${lock}
-done
-bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321  --get_data  --local_save_dir=${workspace}/benchmark/baseline/results/${save_dir}/ --remote_save_dir=${save_dir} --lock_type=${lock}
+bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321 -c 2 -s 1 --think_ns=500 --runtime=10 --remote_save_dir=${save_dir} --log_level=${log_level} --lock_type=${lock} --gdb=True
+
+# echo "Running..."
+# save_dir="exp3_alock"
+# for num_clients in 2 3 4 5 6 7 8 9 
+# do
+#   bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321 -c ${num_clients} -s 1 --think_ns=500 --runtime=10 --remote_save_dir=${save_dir} --log_level=${log_level} --lock_type=${lock}
+# done
+# bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321  --get_data  --local_save_dir=${workspace}/benchmark/baseline/results/${save_dir}/ --remote_save_dir=${save_dir} --lock_type=${lock}

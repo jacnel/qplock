@@ -24,9 +24,9 @@ Client::Client(const ClientProto& client, const ClusterProto& cluster)
       rand_(rd_()) {
   auto nid = client.node().nid();
   auto name = client.node().name();
-  auto rome_port = client.node().rome_port();
+  auto port = client.node().port();
 
-  auto peer = MemoryPool::Peer(nid, name, rome_port);
+  auto peer = MemoryPool::Peer(nid, name, port);
   auto cm = std::make_unique<MemoryPool::cm_type>(peer.id);
   pool_ = std::make_unique<MemoryPool>(peer, std::move(cm));
 }
@@ -37,7 +37,7 @@ void Client::Connect() {
   peers.reserve(cluster_.servers().size());
   for (auto s : cluster_.servers()) {
     auto p =
-        MemoryPool::Peer(s.node().nid(), s.node().name(), s.node().rome_port());
+        MemoryPool::Peer(s.node().nid(), s.node().name(), s.node().port());
     peers.push_back(p);
   }
   ROME_ASSERT_OK(pool_->Init(kPoolSize, peers));

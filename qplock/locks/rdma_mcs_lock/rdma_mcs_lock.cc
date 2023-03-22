@@ -19,7 +19,6 @@ absl::Status RdmaMcsLock::Init(MemoryPool::Peer host,
   auto capacity = 1 << 20;
   auto status = pool_.Init(capacity, peers);
   ROME_ASSERT_OK(status);
-  ROME_INFO("MEM POOL FOR RDMA MCS LOCK CREATED");
   
   // Reserve remote memory for the local descriptor.
   desc_pointer_ = pool_.Allocate<Descriptor>();

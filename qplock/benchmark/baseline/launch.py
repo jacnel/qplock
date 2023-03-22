@@ -82,7 +82,7 @@ flags.DEFINE_integer(
 
 flags.DEFINE_integer(
     'port', 18018, 'Port to listen for incoming connections on')
-flags.DEFINE_string('log_dest', 'tmp/qplock/logs',
+flags.DEFINE_string('log_dest', '/home/amanda/logs/alock',
                     'Name of local log directory for ssh commands')
 flags.DEFINE_boolean(
     'dry_run', False,
@@ -90,6 +90,7 @@ flags.DEFINE_boolean(
 flags.DEFINE_boolean(
     'debug', False, 'Whether to launch a debugpy server to debug this program')
 flags.DEFINE_string('log_level', 'info', 'Rome logging level to launch client & servers with')
+
 
 
 # Parse the experiment file and make it globally accessible
@@ -222,7 +223,6 @@ def build_common_command(lock, params, cluster):
                         '//qplock/benchmark/baseline:main'])
         cmd = ' '.join([cmd, '&& gdb -ex run -ex bt -ex q -ex y --args',
                         'bazel-bin/qplock/benchmark/baseline/main'])
-        print(cmd)
     cmd = ' '.join([cmd, '--experiment_params', quote(make_one_line(params))])
     cmd = ' '.join([cmd, '--cluster', quote(make_one_line(cluster))])
     return cmd
@@ -297,13 +297,8 @@ def build_client_experiment_params(clients):
 
 def build_get_data_command(lock, node, cluster):
     src = build_remote_save_dir(lock)
-    print("\nSRC : ", src)
     dest = build_local_save_dir(lock, node.public_hostname)
-    print("\nDEST : ", dest)
     os.makedirs(dest, exist_ok=True)
-    print('\nCOMMAND:' + 'rsync -aq ' + FLAGS.ssh_user + '@' + build_hostname(
-        node.public_hostname, cluster.domain) + ':' + ' '.join(
-        [src, dest]))
     return 'rsync -aq ' + FLAGS.ssh_user + '@' + build_hostname(
         node.public_hostname, cluster.domain) + ':' + ' '.join(
         [src, dest])

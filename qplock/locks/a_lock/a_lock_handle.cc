@@ -17,17 +17,18 @@ ALockHandle::ALockHandle(MemoryPool::Peer self, MemoryPool &pool)
 absl::Status ALockHandle::Init(MemoryPool::Peer host,
                                const std::vector<MemoryPool::Peer> &peers) {
   is_host_ = self_.id == host.id;
-  // TODO: Currently at 16MB, but really shouldn't need this much
+  // TODO: Currently at 16 MB and runs OOM, but other locks dont even need this much
+  // TODO: TRY OUT 1GB each (1 << 30)
   auto capacity = 1 << 24;
   auto status = pool_.Init(capacity, peers);
-  ROME_ASSERT_OK(status);
+  // ROME_ASSERT_OK(status);
+  ROME_CHECK_OK(ROME_RETURN(status), status);
 
   if (is_host_) {
     // Send all peers the base address of the lock residing on the host
     RemoteObjectProto proto;
     a_lock_pointer_ = pool_.Allocate<ALock>();
     proto.set_raddr(a_lock_pointer_.address());
-    ROME_DEBUG("Lock pointer {:x}", static_cast<uint64_t>(a_lock_pointer_));
     // tell all the peers where to find the addr of the first lock
     for (const auto &p : peers) {
       auto conn_or = pool_.connection_manager()->GetConnection(p.id);

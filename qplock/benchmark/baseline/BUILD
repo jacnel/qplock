@@ -74,7 +74,6 @@ string_flag(
     values = [
         "mcs",
         "spin",
-        "qp",
         "alock",
     ],
 )
@@ -107,9 +106,9 @@ cc_binary(
     data = ["//qplock/benchmark:nodefiles"],
     defines = select(
         {
-            ":mcs": ["QPLOCK_LOCK_TYPE=::X::RdmaMcsLock"],
-            ":spin": ["QPLOCK_LOCK_TYPE=::X::RdmaSpinLock"],
-            ":alock": ["QPLOCK_LOCK_TYPE=::X::ALockHandle"],
+            ":mcs": ["LOCK_TYPE=::X::RdmaMcsLock"],
+            ":spin": ["LOCK_TYPE=::X::RdmaSpinLock"],
+            ":alock": ["LOCK_TYPE=::X::ALockHandle"],
         },
     ),
     deps = [

@@ -6,8 +6,6 @@
 #include <memory>
 #include <unordered_map>
 
-// #include "qplock/rdma_mcs_lock.h"
-// #include "qplock/rdma_spin_lock.h"
 #include "rome/colosseum/qps_controller.h"
 #include "rome/colosseum/streams/streams.h"
 #include "rome/colosseum/workload_driver.h"

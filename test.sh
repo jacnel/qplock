@@ -55,13 +55,13 @@ sync_nodes
 
 
 echo "Running Experiment #2"
-save_dir="exp3_alock"
+save_dir="test_alock"
 lock='alock'
 log_level='info'
 echo "Building ${lock}..."
 # build_lock ${lock}
 
-bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321 -c 2 -s 1 --think_ns=500 --runtime=10 --remote_save_dir=${save_dir} --log_level=${log_level} --lock_type=${lock} --gdb=True
+bazel run //qplock/benchmark/baseline:launch --lock_type=${lock} -- -n ${nodefile}  --ssh_user=adb321 -c 2 -s 1 --think_ns=0 --runtime=2 --remote_save_dir=${save_dir} --log_level=${log_level} --lock_type=${lock} --gdb=True
 
 # echo "Running..."
 # save_dir="exp3_alock"

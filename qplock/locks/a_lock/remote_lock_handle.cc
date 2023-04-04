@@ -64,8 +64,6 @@ bool RemoteLockHandle::IsVictim() {
     return check_victim;
 }
 
-
-//TODO: need to figure put a clever way to return whether or not we are the leader
 void RemoteLockHandle::LockMcsQueue(){
     ROME_DEBUG("Locking remote MCS queue...");
   
@@ -119,7 +117,7 @@ void RemoteLockHandle::Lock(){
     if (is_leader_){
         auto prev = pool_.AtomicSwap(victim_, static_cast<uint8_t>(REMOTE_VICTIM));
         //! this is remotely spinning on the victim var?? --> but competition is only among two at this point
-        while (IsVictim() && IsLTailLocked()){
+        while (IsVictim(REMOTE_VICTIM) && IsLTailLocked()){
             cpu_relax();
         } 
     }
@@ -168,7 +166,7 @@ void RemoteLockHandle::Reacquire() {
             break;
         }
         // ...if I am no longer the victim
-        if(!IsVictim()){
+        if(!IsVictim(REMOTE_VICTIM)){
             break;
         }
         // wait a hot sec before checking again

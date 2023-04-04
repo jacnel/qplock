@@ -16,7 +16,6 @@
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/status/status.h"
-#include "client.h"
 #include "google/protobuf/text_format.h"
 #include "qplock/benchmark/baseline/experiment.pb.h"
 #include "rome/colosseum/client_adaptor.h"
@@ -28,6 +27,8 @@
 #include "rome/rdma/rdma_broker.h"
 #include "rome/util/clocks.h"
 #include "rome/util/proto_util.h"
+
+#include "client.h"
 #include "server.h"
 #include "setup.h"
 

@@ -4,11 +4,12 @@
 
 #include <memory>
 
-#include "absl/status/status.h"
 #include "qplock/benchmark/baseline/experiment.pb.h"
 #include "qplock/locks/rdma_mcs_lock/rdma_mcs_lock.h"
 #include "qplock/locks/spin_lock/rdma_spin_lock.h"
 #include "qplock/locks/a_lock/a_lock_handle.h"
+
+#include "absl/status/status.h"
 #include "rome/colosseum/client_adaptor.h"
 #include "rome/colosseum/streams/streams.h"
 #include "rome/logging/logging.h"
@@ -37,10 +38,10 @@ using Peer = ::rome::rdma::MemoryPool::Peer;
 using cm_type = ::rome::rdma::MemoryPool::cm_type;
 using conn_type = ::rome::rdma::MemoryPool::conn_type;
 
-#ifdef QPLOCK_LOCK_TYPE
-using LockType = QPLOCK_LOCK_TYPE;
+#ifdef LOCK_TYPE
+using LockType = LOCK_TYPE;
 #else
-#error "QPLOCK_LOCK_TYPE is undefined"
+#error "LOCK_TYPE is undefined"
 #endif
 
 static constexpr uint16_t kServerPort = 18000;

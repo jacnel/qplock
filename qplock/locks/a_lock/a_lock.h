@@ -17,41 +17,49 @@ using ::rome::rdma::remote_ptr;
 
 static constexpr uint32_t kInitBudget = 5;
 
+static constexpr uint32_t LOCAL_VICTIM = 0;
+static constexpr uint32_t REMOTE_VICTIM = 1;
+
 struct alignas(64) RdmaDescriptor {
     int8_t budget{-1};
-    bool locked{false}; //track when locked
-    uint8_t pad1[32 - sizeof(budget) - sizeof(locked)];
+    uint8_t pad1[16 - sizeof(budget)];
+    uint64_t locked{0}; //track when locked
+    uint8_t pad2[16 - sizeof(locked)];
     remote_ptr<RdmaDescriptor> next{0};
-    uint8_t pad2[32 - sizeof(uintptr_t)];
+    uint8_t pad3[32 - sizeof(next)];
 };
 static_assert(alignof(RdmaDescriptor) == CACHELINE_SIZE);
 static_assert(sizeof(RdmaDescriptor) == CACHELINE_SIZE);
 
 struct alignas(64) LocalDescriptor {
     int8_t budget{-1}; //budget == -1 indicates its locked, unlocked and passed off when it can proceed to critical section
-    bool locked{false}; //track when locked
-    uint8_t pad1[32 - sizeof(budget) - sizeof(locked)];
+    uint8_t pad1[16 - sizeof(budget)];
+    uint64_t locked{0}; //track when locked
+    uint8_t pad2[16 - sizeof(locked)];
     LocalDescriptor* next{nullptr};
-    uint8_t pad2[32 - sizeof(next)];
+    uint8_t pad3[32 - sizeof(next)];
 };
 static_assert(alignof(LocalDescriptor) == CACHELINE_SIZE);
 static_assert(sizeof(LocalDescriptor) == CACHELINE_SIZE);
 
+// ! SHOULD THESE BE PADDED SUCH THAT THE POINTERS DO NOT OVERLAP CACHE LINES TO AVOID USING STALE CACHED VALUES?
 struct alignas(64) ALock {
     // pointer to the pointer of the remote tail
     remote_ptr<RdmaDescriptor> r_tail;
     // pad so local tail starts at addr+16
-    uint8_t pad[16 - sizeof(r_tail)]; 
+    uint8_t pad1[16 - sizeof(r_tail)]; 
     // pointer to the local tail
     remote_ptr<LocalDescriptor> l_tail; 
     // pad so victim starts at addr+32
-    uint8_t pad1[16 - sizeof(l_tail)]; 
+    uint8_t pad2[16 - sizeof(l_tail)]; 
     // node id of the victim
     uint64_t victim; 
+    // pad so locked starts at addr+16
+    uint8_t pad3[16 - sizeof(victim)]; 
     // track if handle has been locked
-    bool locked{false};
-    // pad to fill second cacheline
-    uint8_t pad2[32 - sizeof(victim) - sizeof(locked)];
+    int8_t locked{0};
+    // pad to fill cacheline
+    uint8_t pad4[16 - sizeof(locked)];
 };
 
 static_assert(alignof(ALock) == CACHELINE_SIZE);

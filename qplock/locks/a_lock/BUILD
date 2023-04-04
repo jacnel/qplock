@@ -1,5 +1,5 @@
 cc_library(
-    name = "alock-common",
+    name = "alock_common",
     hdrs = ["a_lock.h"],
     deps = [
         "//qplock:util",
@@ -13,39 +13,7 @@ cc_library(
     hdrs = ["a_lock_handle.h"],
     visibility = ["//visibility:public"],
     deps = [
-        ":alock-common",
-        ":lock_handle",
-        ":remote_lock_handle",
-        "@rome//rome/rdma:rdma_memory",
-        "@rome//rome/rdma/channel:sync_accessor",
-        "@rome//rome/rdma/connection_manager",
-        "@rome//rome/rdma/memory_pool",
-        "@rome//rome/rdma/memory_pool:remote_ptr",
-    ],
-)
-
-cc_library(
-    name = "lock_handle",
-    srcs = ["lock_handle.cc"],
-    hdrs = ["lock_handle.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":alock-common",
-        "@rome//rome/rdma:rdma_memory",
-        "@rome//rome/rdma/channel:sync_accessor",
-        "@rome//rome/rdma/connection_manager",
-        "@rome//rome/rdma/memory_pool",
-        "@rome//rome/rdma/memory_pool:remote_ptr",
-    ],
-)
-
-cc_library(
-    name = "remote_lock_handle",
-    srcs = ["remote_lock_handle.cc"],
-    hdrs = ["remote_lock_handle.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":alock-common",
+        ":alock_common",
         "@rome//rome/rdma:rdma_memory",
         "@rome//rome/rdma/channel:sync_accessor",
         "@rome//rome/rdma/connection_manager",

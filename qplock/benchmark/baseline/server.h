@@ -67,3 +67,65 @@ private:
   X::MemoryPool pool_;
   LockType lock_;
 };
+
+class ServerHarness {
+ public:
+  ~ServerHarness() = default;
+
+  static std::unique_ptr<ServerHarness> Create(
+      std::unique_ptr<X::Server<key_type, value_type>> server,
+      const X::NodeProto& node, ExperimentParams params) {
+    return std::unique_ptr<ServerHarness>(
+        new ServerHarness(std::move(server), node, params));
+  }
+
+  absl::Status Launch(volatile bool* done, ExperimentParams experiment_params) {
+    std::vector<std::unique_ptr<Worker>> workers;
+    for (auto i = 0; i < experiment_params.workload().worker_threads(); ++i) {
+      workers.emplace_back(
+          Worker::Create(server_->GetDatastore(), node_, params_, &barrier_));
+    }
+
+    std::for_each(workers.begin(), workers.end(), [&](auto& worker) {
+      results_.emplace_back(std::async([&]() {
+        return Worker::Run(std::move(worker), experiment_params, done);
+      }));
+    });
+
+    std::for_each(results_.begin(), results_.end(),
+                  [](auto& result) { result.wait(); });
+
+    for (auto& r : results_) {
+      auto result_or = r.get();
+      if (!result_or.ok()) {
+        ROME_ERROR("{}", result_or.status().message());
+      } else {
+        result_protos_.push_back(result_or.value());
+      }
+    }
+
+    ROME_DEBUG("Waiting for clients to disconnect (in destructor)...");
+    server_.reset();
+    return absl::OkStatus();
+  }
+
+  std::vector<ResultProto> GetResults() { return result_protos_; }
+
+ private:
+  static constexpr size_t kNumEntries = 1 << 12;
+
+  ServerHarness(std::unique_ptr<X::Server<key_type, value_type>> server,
+                const X::NodeProto& node, ExperimentParams params)
+      : server_(std::move(server)),
+        node_(node),
+        params_(params),
+        barrier_(params.workload().worker_threads()) {}
+
+  std::unique_ptr<X::Server<key_type, value_type>> server_;
+  const X::NodeProto& node_;
+  ExperimentParams params_;
+
+  std::barrier<> barrier_;
+  std::vector<std::future<absl::StatusOr<ResultProto>>> results_;
+  std::vector<ResultProto> result_protos_;
+};

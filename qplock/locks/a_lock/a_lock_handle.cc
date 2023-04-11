@@ -4,26 +4,12 @@ namespace X {
 
 using ::rome::rdma::ConnectionManager;
 using ::rome::rdma::MemoryPool;
-using : u:rome::rdma::remote_nullptr;
+using ::rome::rdma::remote_nullptr;
 using ::rome::rdma::remote_ptr;
 using ::rome::rdma::RemoteObjectProto;
 
 ALockHandle::ALockHandle(MemoryPool::Peer self, MemoryPool &pool)
     : self_(self), pool_(pool) {}
-  
-absl::Status ALockHandle::Init(MemoryPool::Peer host,
-                               const std::vector<MemoryPool::Peer> &peers){
-    is_host_ = self_.id == host.id;
-    
-    // ROME_ASSERT_OK(status);
-    ROME_CHECK_OK(ROME_RETURN(status), status)
-
-    if (is_host_){
-      // We are the host node of this ALock, initalize the Alock itself
-      return ALockInit(peers);
-    }
-    return HandleInit(host, &peers);                         
-}
 
 // TODO: MOVE THIS CODE TO SERVER? WE WANT TO CONTROL HOW MANY WE ARE CREATING.....
 absl::Status ALockHandle::ALockInit(const std::vector<MemoryPool::Peer> &peers){
@@ -47,28 +33,19 @@ absl::Status ALockHandle::ALockInit(const std::vector<MemoryPool::Peer> &peers){
   return absl::OkStatus();
 }
 
-absl::Status ALockHandle::HandlerInit(MemoryPool::Peer host,
+absl::Status ALockHandle::Init(MemoryPool::Peer host,
                                const std::vector<MemoryPool::Peer> &peers) {
   // TODO: Currently at 16 MB and runs OOM, but other locks dont even need this much
-  // TODO: TRY OUT 1GB each (1 << 30)
-  auto capacity = 1 << 24;
-  // Allocate pool for Descriptors
+  auto capacity = 1 << 30;
+  // Allocate pool for Remote Descriptors
   auto status = pool_.Init(capacity, peers);
   // ROME_ASSERT_OK(status);
   ROME_CHECK_OK(ROME_RETURN(status), status);
+ 
+  // allocate local and remote descriptors for client to use
+  AllocateClientDescriptors();
 
-  //TODO: SWITCH TO ALLOCATING AN RING BUFFER OF 500 Descriptors per lock (print when we ring around for now)
-   // allocate memory for RdmaDescriptors in mempool
-  for (int i = 0; i < DESCS_PER_LOCK; i++){
-    r_desc_pointer_ = pool_.Allocate<RdmaDescriptor>();
-    r_desc_ = reinterpret_cast<RdmaDescriptor *>(r_desc_pointer_.address());
-    ROME_DEBUG("RdmaDescriptor @ {:x}", static_cast<uint64_t>(r_desc_pointer_));
-  }
-
-  // allocate memory for a LocalDescriptor in mempool
-  l_desc_pointer_ = pool_.Allocate<LocalDescriptor>();
-  l_desc_ = reinterpret_cast<LocalDescriptor *>(l_desc_pointer_.address());
-  ROME_DEBUG("LocalDescriptor @ {:x}", static_cast<uint64_t>(l_desc_pointer_));
+  //Get base address of alock mem pool from each server role
 
   // Otherwise, wait until the base address is shared by the host
   auto conn_or = pool_.connection_manager()->GetConnection(host.id);
@@ -82,16 +59,44 @@ absl::Status ALockHandle::HandlerInit(MemoryPool::Peer host,
   a_lock_pointer_ = decltype(a_lock_pointer_)(host.id, got->raddr());
 
   //Used as preallocated memory for RDMA writes
-  prealloc_ = pool_.Allocate<ALock>();
+  prealloc_ = pool_.Allocate<remote_ptr<RdmaDescriptor>>();
   
   ROME_DEBUG("Lock pointer {:x}", static_cast<uint64_t>(a_lock_pointer_));
   return absl::OkStatus();
+}
+
+void ALockHandle::AllocateClientDescriptors(){
+  // Pointer to first remote descriptor
+  r_desc_pointer_ = pool_.Allocate<RdmaDescriptor>();
+  r_desc_ = reinterpret_cast<RdmaDescriptor *>(r_desc_pointer_.address());
+  ROME_INFO("First RdmaDescriptor @ {:x}", static_cast<uint64_t>(r_desc_pointer_));
+  for (int i = 0; i < DESCS_PER_CLIENT; i++){
+    auto temp = pool_.Allocate<RdmaDescriptor>();
+    ROME_DEBUG("RdmaDescriptor @ {:x}", static_cast<uint64_t>(temp));
+  }
+  
+  // Make sure all rdma descriptors are allocated first in contiguous memory
+  std::atomic_thread_fence(std::memory_order_release);
+
+  // Pointer to first local descriptor
+  l_desc_pointer_ = pool_.Allocate<LocalDescriptor>();
+  l_desc_ = reinterpret_cast<LocalDescriptor *>(l_desc_pointer_.address());
+  ROME_DEBUG("First LocalDescriptor @ {:x}", static_cast<uint64_t>(l_desc_pointer_));
+  for (int i = 0; i < DESCS_PER_CLIENT; i++){
+    auto temp = pool_.Allocate<LocalDescriptor>();
+    ROME_DEBUG("LocalDescriptor @ {:x}", static_cast<uint64_t>(temp));
+  }
 }
 
 bool ALockHandle::IsLocked() {
   // TODO: figure this out, not used rn
   // return a_lock_->locked; 
   return false;
+}
+
+// may need to change to take in an addr for when we expand to multiple locks
+bool inline ALockHandle::IsLocal(){
+  return ((a_lock_pointer_).id() == self_.id);
 }
 
 bool ALockHandle::IsRTailLocked(){
@@ -108,8 +113,8 @@ bool ALockHandle::IsRTailLocked(){
 }
 
 bool ALockHandle::IsLTailLocked(){
-     // read in value of current l_tail on host
-    auto remote = pool_.Read<remote_ptr<LocalDescriptor>>(l_tail_);
+    // remotely read in value of current l_tail on host
+    auto remote = pool_.Read<remote_ptr<LocalDescriptor>>(r_l_tail_);
     // store result of if its locked
     auto locked = static_cast<uint64_t>(*(std::to_address(remote))) != 0;
     // deallocate the ptr used as a landing spot for reading in (which is created in Read)
@@ -119,16 +124,11 @@ bool ALockHandle::IsLTailLocked(){
     return locked;
 }
 
-// may need to change to take in an addr for when we expand to multiple locks
-bool inline ALockHandle::IsLocal(){
-  return ((a_lock_pointer_).id() == self_.id);
-}
-
 bool ALockHandle::IsRemoteVictim() {
     // read in value of victim var on host
-    auto remote = pool_.Read<uint64_t>(victim_);
+    auto remote = pool_.Read<uint64_t>(r_victim_);
     // store result of if its locked
-    auto check_victim = static_cast<uint64_t>(*(std::to_address(remote))) == victim_id;
+    auto check_victim = static_cast<uint64_t>(*(std::to_address(remote))) == REMOTE_VICTIM;
     // deallocate the ptr used as a landing spot for reading in (which is created in Read)
     auto ptr =
         remote_ptr<uint64_t>{self_.id, std::to_address(remote)};
@@ -184,62 +184,33 @@ void ALockHandle::LockRemoteMcsQueue(){
     std::atomic_thread_fence(std::memory_order_acquire);
 }
 
-void ALockHandle::LocalLock(){
-  ROME_DEBUG("ALockHandle::LocalLock()");
-    ROME_ASSERT(!is_locked_, "Lock has already been called on LockHandle.");
-    is_locked_ = true;
-    LockLocalMcsQueue();
-    if (is_l_leader_){
-        auto prev = victim_.exchange(LOCAL_VICTIM, std::memory_order_acquire);
-        while (*victim_== LOCAL_VICTIM && IsRTailLocked()){
-            cpu_relax();
-        } 
-    }
-    std::atomic_thread_fence(std::memory_order_release);
-}
-
-void ALockHandle::LocalUnlock(){
-    std::atomic_thread_fence(std::memory_order_release);
-    ROME_DEBUG("ALockHandle::LocalUnLock()");
-    //...leave the critical section
-    // check whether this thread's local node’s next field is null
-    if (l_desc_->next == nullptr) {
-        // if so, then either:
-        //  1. no other thread is contending for the lock
-        //  2. there is a race condition with another thread about to
-        // to distinguish between these cases atomic compare exchange the tail field
-        // if the call succeeds, then no other thread is trying to acquire the lock,
-        // tail is set to nullptr, and unlock() returns
-        LocalDescriptor* p = l_desc_;
-        if (l_tail_.compare_exchange_strong(p, nullptr, std::memory_order_release,
-                                        std::memory_order_relaxed)) {
-            return;
-        }
-        // otherwise, another thread is in the process of trying to acquire the
-        // lock, so spins waiting for it to finish
-        while (l_desc_->next == nullptr) {
-        };
-    }
-    // in either case, once the successor has appeared, the unlock() method sets
-    // its successor’s locked field to false, indicating that the lock is now free
-    l_desc_->next->budget = l_desc_->budget - 1;
-    //! NOT sure if this is reasonable
-    is_l_leader_ = false;
-    // ! THIS IS HOW WE KNOW WHEN TO ALLOW REUSING (CHECK IF NEXT IS NULLPTR AND ALWAYS MOVE FORWARD)
-    // at this point no other thread can access this node and it can be reused
-    l_desc_->next = nullptr;
-}
-
-
 void ALockHandle::RemoteLock(){
     LockRemoteMcsQueue();
     if (is_r_leader_){
-        auto prev = pool_.AtomicSwap(victim_, static_cast<uint8_t>(REMOTE_VICTIM));
+        auto prev = pool_.AtomicSwap(r_victim_, static_cast<uint8_t>(REMOTE_VICTIM));
         //! this is remotely spinning on the victim var?? --> but competition is only among two at this point
-        while (IsVictim() && IsLTailLocked()){
+        while (IsRemoteVictim() && IsLTailLocked()){
             cpu_relax();
         } 
     }
+}
+
+void ALockHandle::LockLocalMcsQueue(){
+
+}
+
+void ALockHandle::LocalLock(){
+  ROME_DEBUG("ALockHandle::LocalLock()");
+    // ROME_ASSERT(!is_locked_, "Lock has already been called on LockHandle.");
+    // is_locked_ = true;
+    LockLocalMcsQueue();
+    if (is_l_leader_){
+        auto prev = l_victim_.exchange(LOCAL_VICTIM, std::memory_order_acquire);
+        while (*l_victim_== LOCAL_VICTIM && IsRTailLocked()){
+            cpu_relax();
+        } 
+    }
+    std::atomic_thread_fence(std::memory_order_release);
 }
 
 void ALockHandle::RemoteUnlock(){
@@ -268,10 +239,42 @@ void ALockHandle::RemoteUnlock(){
                             static_cast<remote_ptr<uint64_t>>(prealloc_));
     } 
     //else: successful CAS, we unlocked our RdmaDescriptor and no one is queued after us
-    is_locked_ = false;
+    // is_locked_ = false;
     is_r_leader_ = false;
     ROME_DEBUG("[Unlock] Unlocked (id={})",
                 static_cast<uint64_t>(r_desc_pointer_.id()));
+}
+
+void ALockHandle::LocalUnlock(){
+    std::atomic_thread_fence(std::memory_order_release);
+    ROME_DEBUG("ALockHandle::LocalUnLock()");
+    //...leave the critical section
+    // check whether this thread's local node’s next field is null
+    if (l_desc_->next == nullptr) {
+        // if so, then either:
+        //  1. no other thread is contending for the lock
+        //  2. there is a race condition with another thread about to
+        // to distinguish between these cases atomic compare exchange the tail field
+        // if the call succeeds, then no other thread is trying to acquire the lock,
+        // tail is set to nullptr, and unlock() returns
+        LocalDescriptor* p = l_desc_;
+        if (l_l_tail_.compare_exchange_strong(p, nullptr, std::memory_order_release,
+                                        std::memory_order_relaxed)) {
+            return;
+        }
+        // otherwise, another thread is in the process of trying to acquire the
+        // lock, so spins waiting for it to finish
+        while (l_desc_->next == nullptr) {
+        };
+    }
+    // in either case, once the successor has appeared, the unlock() method sets
+    // its successor’s locked field to false, indicating that the lock is now free
+    l_desc_->next->budget = l_desc_->budget - 1;
+    //! NOT sure if this is reasonable
+    is_l_leader_ = false;
+    // ! THIS IS HOW WE KNOW WHEN TO ALLOW REUSING (CHECK IF NEXT IS NULLPTR AND ALWAYS MOVE FORWARD)
+    // at this point no other thread can access this node and it can be reused
+    l_desc_->next = nullptr;
 }
 
 //Eventually will take in remote_ptr<ALock> once using sharding or just an offset?

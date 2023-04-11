@@ -22,26 +22,6 @@ config_setting(
     flag_values = {":remote_only": "false"},
 )
 
-string_flag(
-    name = "no_rq_response",
-    build_setting_default = "false",
-    values = [
-        "true",
-        "false",
-    ],
-    visibility = ["//visibility:public"],
-)
-
-config_setting(
-    name = "no_rq_response_true",
-    flag_values = {":no_rq_response": "true"},
-)
-
-config_setting(
-    name = "no_rq_response_false",
-    flag_values = {":no_rq_response": "false"},
-)
-
 cc_library(
     name = "handler_pool",
     hdrs = ["handler_pool.h"],
